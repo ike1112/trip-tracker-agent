@@ -3,6 +3,9 @@ node_modules
 .cdk.staging
 cdk.out
 .venv
+.venv-tests
 .idea
 .env
 __pycache__
+.pytest_cache
+.claude/prp-ralph.state.md
