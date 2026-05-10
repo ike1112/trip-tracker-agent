@@ -1,0 +1,86 @@
+{
+    "recordedAt": "2026-05-10T00:00:00Z",
+    "source": "synthetic-for-portfolio-demo",
+    "offers": [
+        {
+            "id": "off_0000ANA_SFO_NRT_20261015",
+            "totalAmount": 1284.50,
+            "currency": "USD",
+            "owner": "NH",
+            "slices": [
+                {
+                    "origin": "SFO",
+                    "destination": "NRT",
+                    "duration": "PT11H5M",
+                    "stops": 0,
+                    "segments": [
+                        {
+                            "airline": "NH",
+                            "flightNumber": "8",
+                            "departAt": "2026-10-15T11:55:00",
+                            "arriveAt": "2026-10-16T15:00:00"
+                        }
+                    ]
+                },
+                {
+                    "origin": "NRT",
+                    "destination": "SFO",
+                    "duration": "PT9H40M",
+                    "stops": 0,
+                    "segments": [
+                        {
+                            "airline": "NH",
+                            "flightNumber": "7",
+                            "departAt": "2026-10-20T17:30:00",
+                            "arriveAt": "2026-10-20T10:10:00"
+                        }
+                    ]
+                }
+            ],
+            "expiresAt": "2026-10-15T11:55:00Z"
+        },
+        {
+            "id": "off_0001UA_SFO_NRT_20261015",
+            "totalAmount": 1148.00,
+            "currency": "USD",
+            "owner": "UA",
+            "slices": [
+                {
+                    "origin": "SFO",
+                    "destination": "NRT",
+                    "duration": "PT12H30M",
+                    "stops": 1,
+                    "segments": [
+                        {
+                            "airline": "UA",
+                            "flightNumber": "874",
+                            "departAt": "2026-10-15T10:35:00",
+                            "arriveAt": "2026-10-15T17:05:00"
+                        },
+                        {
+                            "airline": "UA",
+                            "flightNumber": "3215",
+                            "departAt": "2026-10-15T19:15:00",
+                            "arriveAt": "2026-10-15T23:05:00"
+                        }
+                    ]
+                },
+                {
+                    "origin": "NRT",
+                    "destination": "SFO",
+                    "duration": "PT10H10M",
+                    "stops": 0,
+                    "segments": [
+                        {
+                            "airline": "UA",
+                            "flightNumber": "837",
+                            "departAt": "2026-10-20T17:55:00",
+                            "arriveAt": "2026-10-20T11:05:00"
+                        }
+                    ]
+                }
+            ],
+            "expiresAt": "2026-10-15T10:35:00Z"
+        }
+    ]
+}

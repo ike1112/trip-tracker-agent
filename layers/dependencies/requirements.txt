@@ -1,0 +1,9 @@
+strands-agents==1.0.0
+fastapi==0.115.12
+pydantic==2.11.5
+mcp==1.11.0
+uvicorn==0.34.3
+pyjwt==2.10.1
+cryptography==45.0.4
+aws-lambda-powertools==3.4.0
+aws-xray-sdk==2.14.0

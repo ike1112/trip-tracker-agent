@@ -1,0 +1,29 @@
+{
+    "recordedAt": "2026-05-10T00:00:00Z",
+    "source": "synthetic-for-portfolio-demo",
+    "offers": [
+        {
+            "id": "off_0010BA_LHR_CDG_20261220",
+            "totalAmount": 142.30,
+            "currency": "USD",
+            "owner": "BA",
+            "slices": [
+                {
+                    "origin": "LHR",
+                    "destination": "CDG",
+                    "duration": "PT1H20M",
+                    "stops": 0,
+                    "segments": [
+                        {
+                            "airline": "BA",
+                            "flightNumber": "304",
+                            "departAt": "2026-12-20T08:40:00",
+                            "arriveAt": "2026-12-20T11:00:00"
+                        }
+                    ]
+                }
+            ],
+            "expiresAt": "2026-12-20T08:40:00Z"
+        }
+    ]
+}

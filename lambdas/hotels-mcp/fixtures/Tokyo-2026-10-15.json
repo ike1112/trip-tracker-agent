@@ -1,0 +1,42 @@
+{
+    "recordedAt": "2026-05-10T00:00:00Z",
+    "source": "synthetic-for-portfolio-demo",
+    "hotels": [
+        {
+            "id": "lp_tokyo_park_central",
+            "hotelName": "Park Central Tokyo",
+            "totalAmount": 720.00,
+            "currency": "USD",
+            "stars": 4,
+            "address": "5-2-1 Akasaka, Minato-ku, Tokyo",
+            "checkin": "2026-10-15",
+            "checkout": "2026-10-20",
+            "refundable": true,
+            "bookingDeepLink": "https://www.liteapi.travel/book/lp_tokyo_park_central?d=20261015"
+        },
+        {
+            "id": "lp_tokyo_shibuya_business",
+            "hotelName": "Shibuya Business Hotel",
+            "totalAmount": 485.00,
+            "currency": "USD",
+            "stars": 3,
+            "address": "2-22-14 Dogenzaka, Shibuya-ku, Tokyo",
+            "checkin": "2026-10-15",
+            "checkout": "2026-10-20",
+            "refundable": false,
+            "bookingDeepLink": "https://www.liteapi.travel/book/lp_tokyo_shibuya_business?d=20261015"
+        },
+        {
+            "id": "lp_tokyo_imperial_grand",
+            "hotelName": "Imperial Grand Tokyo",
+            "totalAmount": 1240.00,
+            "currency": "USD",
+            "stars": 5,
+            "address": "1-1-1 Uchisaiwaicho, Chiyoda-ku, Tokyo",
+            "checkin": "2026-10-15",
+            "checkout": "2026-10-20",
+            "refundable": true,
+            "bookingDeepLink": "https://www.liteapi.travel/book/lp_tokyo_imperial_grand?d=20261015"
+        }
+    ]
+}

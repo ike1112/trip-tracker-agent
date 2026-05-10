@@ -1,0 +1,17 @@
+{
+  "name": "hotels-mcp",
+  "type": "module",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "description": "Hotels MCP server (LiteAPI-backed). Direct Lambda handler, no Express, fixture-replayable for offline review.",
+  "scripts": {
+    "test": "node --import ./tests/setup.js --test --test-reporter=spec \"tests/*.test.js\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@aws-lambda-powertools/logger": "^2.10.0",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.23.8"
+  },
+  "main": "index.js"
+}

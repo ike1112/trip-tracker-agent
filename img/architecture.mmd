@@ -1,0 +1,66 @@
+flowchart LR
+  subgraph CLIENT["CLIENT (local)"]
+    USER["User<br/>Alice / Bob<br/>(browser)"]
+    WEB["Gradio Web UI<br/>FastAPI :8000<br/>app.py + oauth.py<br/>holds Cognito token<br/>in server session"]
+  end
+
+  subgraph IDENTITY["IDENTITY â€” Amazon Cognito"]
+    UP["User Pool<br/>Users: Alice, Bob<br/>8h token TTL<br/>username + email sign-in"]
+    HUI["Hosted UI<br/>OAuth2 code grant<br/>scopes: openid email profile"]
+    JWKS["JWKS Endpoint<br/>/.well-known/jwks.json<br/>RS256 public keys"]
+  end
+
+  subgraph EDGE["API EDGE + AUTHORIZERS"]
+    AAPI["Agent API GW<br/>REST Â· Regional<br/>POST /<br/>(travel-agent-api)"]
+    AAUTH["Agent Authorizer<br/>Lambda Â· Node 22 Â· ARM64<br/>verifies Cognito RS256<br/>via JWKS Â· returns IAM policy"]
+    MAPI["MCP API GW<br/>REST Â· Regional<br/>ANY /mcp<br/>(travel-agent-mcp-api)"]
+    MAUTH["MCP Authorizer<br/>Lambda Â· Node 22 Â· ARM64<br/>verifies HS256 JWT<br/>requires sub == 'travel-agent'"]
+  end
+
+  subgraph COMPUTE["LAMBDA COMPUTE"]
+    AGT["Travel Agent Lambda<br/>Python 3.13 Â· ARM64<br/>1024 MB / 30s<br/>Strands Agents SDK<br/>S3SessionManager<br/>in-process tools:<br/>get_user_location Â· get_todays_date<br/>mints HS256 JWT per user"]
+    MCP["Bookings MCP Lambda<br/>Node 22 Â· ARM64<br/>1024 MB / 10s<br/>Lambda Web Adapter + Express<br/>MCP TypeScript SDK<br/>tools: get-travel-policies Â·<br/>get-available-cars Â· book-car Â· book-hotel<br/>stateless per request"]
+    LAYERS["Lambda Layers<br/>LWA ARM64 v25<br/>Python deps (strands, mcp, jwt)"]
+  end
+
+  subgraph BACKEND["AWS DATA + AI"]
+    S3[("S3 Bucket â€” Agent Sessions<br/>key: agent_sessions/<br/>session_for_user_{cognito_sub}<br/>per-user state isolation")]
+    BR["Amazon Bedrock<br/>Claude 3.5 Haiku<br/>us.anthropic.claude-3-5-haiku-20241022-v1:0<br/>region: us-east-1"]
+    CW["CloudWatch Logs<br/>Lambda runtime + API GW"]
+  end
+
+  USER -- "1 Â· open /chat" --> WEB
+  WEB -- "2 Â· redirect to login" --> HUI
+  HUI -. "3 Â· Cognito JWT (callback)" .-> WEB
+  WEB == "4 Â· POST / + Bearer (Cognito)" ==> AAPI
+  AAPI -- "5 Â· authorize" --> AAUTH
+  AAUTH -. "6 Â· fetch RS256 keys" .-> JWKS
+  AAPI == "7 Â· invoke" ==> AGT
+  AGT -- "8 Â· load/save session" --> S3
+  AGT == "9 Â· invoke Claude" ==> BR
+  AGT == "10 Â· POST /mcp + HS256" ==> MAPI
+  MAPI -- "11 Â· authorize" --> MAUTH
+  MAPI == "12 Â· tool call" ==> MCP
+
+  AGT --> CW
+  MCP --> CW
+  AGT -.-> LAYERS
+  MCP -.-> LAYERS
+  UP --- HUI
+  UP --- JWKS
+
+  classDef client fill:#a5d8ff,stroke:#2563eb,color:#000
+  classDef ident fill:#d0bfff,stroke:#6d28d9,color:#000
+  classDef edge fill:#fff3bf,stroke:#a16207,color:#000
+  classDef auth fill:#ffd8a8,stroke:#9a3412,color:#000
+  classDef compute fill:#ffc9c9,stroke:#b91c1c,color:#000
+  classDef data fill:#b2f2bb,stroke:#15803d,color:#000
+  classDef ops fill:#c3fae8,stroke:#0e7490,color:#000
+
+  class USER,WEB client
+  class UP,HUI,JWKS ident
+  class AAPI,MAPI edge
+  class AAUTH,MAUTH auth
+  class AGT,MCP,LAYERS compute
+  class S3,BR data
+  class CW ops

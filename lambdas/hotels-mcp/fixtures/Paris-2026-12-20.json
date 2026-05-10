@@ -1,0 +1,30 @@
+{
+    "recordedAt": "2026-05-10T00:00:00Z",
+    "source": "synthetic-for-portfolio-demo",
+    "hotels": [
+        {
+            "id": "lp_paris_left_bank",
+            "hotelName": "Hôtel Left Bank",
+            "totalAmount": 410.00,
+            "currency": "USD",
+            "stars": 3,
+            "address": "9 Rue de l'Université, 75007 Paris",
+            "checkin": "2026-12-20",
+            "checkout": "2026-12-23",
+            "refundable": true,
+            "bookingDeepLink": "https://www.liteapi.travel/book/lp_paris_left_bank?d=20261220"
+        },
+        {
+            "id": "lp_paris_marais_boutique",
+            "hotelName": "Marais Boutique",
+            "totalAmount": 612.00,
+            "currency": "USD",
+            "stars": 4,
+            "address": "12 Rue de Turenne, 75004 Paris",
+            "checkin": "2026-12-20",
+            "checkout": "2026-12-23",
+            "refundable": false,
+            "bookingDeepLink": "https://www.liteapi.travel/book/lp_paris_marais_boutique?d=20261220"
+        }
+    ]
+}
