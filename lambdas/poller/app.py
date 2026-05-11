@@ -3,11 +3,10 @@ Lambda entrypoint for the trip-tracker poller.
 
 Slice 5 progress (per `tasks/slice-5-poller.plan.md`):
   ✅ T1: walking skeleton — enumerate active watches and log each.
-  🚧 T2: per-watch MCP calls (flights + hotels) with internal JWT auth.
-
-Subsequent tasks add: FareHistory snapshot writes (T3), gates + decision
-stub + CloudWatch metrics (T4), EventBridge enable + ADR + threat model +
-e2e test (T5).
+  ✅ T2: per-watch MCP calls (flights + hotels) with internal JWT auth.
+  ✅ T3: snapshot composer + FareHistory writer per watch.
+  🚧 T4: gates + decision stub + CloudWatch metrics.
+  ⏭ T5: EventBridge enable + ADR 0003 + threat model + e2e.
 
 The handler runs sequentially per ADR 0003 — one watch at a time, one MCP
 at a time. A failure on one watch logs and skips; the loop continues with
@@ -32,6 +31,8 @@ from mcp_client import (
     call_hotels,
     derive_dates,
 )
+from snapshot import compose_snapshot
+from writer import write_snapshot
 
 logger = Logger(service="trip-tracker-poller")
 
@@ -58,15 +59,18 @@ def _require_endpoints() -> None:
 
 
 def _poll_one(watch: dict) -> None:
-    """Process one watch: sign a per-user JWT, hit both MCPs, log results.
+    """Process one watch: sign per-user JWT, call both MCPs, compose +
+    write a FareHistory snapshot.
 
-    T2 stops at logging — no FareHistory write yet (T3) and no decision
-    yet (T4). The MCP responses are deliberately not stored on the watch
-    dict to avoid muddying the per-task contract.
+    Returns early (without raising) when compose_snapshot determines the
+    poll has no qualifying offers — that's a soft skip logged as
+    `snapshot_skipped`, not a `watch_errored`.
 
     Raises:
-        McpCallError: on any provider/transport failure. The caller catches
-            and logs, per ADR 0003 (one bad watch never blocks the others).
+        McpCallError: on any MCP provider/transport failure (T2).
+        ValueError: snapshot composer found a non-USD currency (T3).
+        KeyError:    malformed Duffel-shaped offer (missing slices/segments).
+        The caller catches all three and logs `watch_errored`, per ADR 0003.
     """
     user_id = watch["userId"]
     watch_id = watch["watchId"]
@@ -121,6 +125,27 @@ def _poll_one(watch: dict) -> None:
         },
     )
 
+    # T3: compose + write the FareHistory snapshot. compose_snapshot()
+    # returns None when either side has no qualifying offers — we log and
+    # treat as a soft skip (no metric increment yet; T4 wires the metrics).
+    snapshot = compose_snapshot(watch, flights_payload, hotels_payload)
+    if snapshot is None:
+        logger.info(
+            "snapshot_skipped",
+            extra={**log_extra, "reason": "no_qualifying_offers"},
+        )
+        return
+    write_snapshot(snapshot)
+    logger.info(
+        "snapshot_written",
+        extra={
+            **log_extra,
+            "flight_price": str(snapshot["flightPrice"]),
+            "hotel_price":  str(snapshot["hotelPrice"]),
+            "total_price":  str(snapshot["totalPrice"]),
+        },
+    )
+
 
 def handler(event: dict, context: LambdaContext) -> dict:
     """
@@ -145,7 +170,12 @@ def handler(event: dict, context: LambdaContext) -> dict:
         )
         try:
             _poll_one(watch)
-        except McpCallError as e:
+        except (McpCallError, ValueError, KeyError) as e:
+            # McpCallError: transport / HTTP / envelope failures (T2).
+            # ValueError: snapshot composer rejects non-USD currency (T3).
+            # KeyError: malformed offer (missing slices/segments) (T3).
+            # All of these are "this watch couldn't be processed; skip and
+            # continue with the next" per ADR 0003.
             errored += 1
             # Deliberately do NOT log `e.body` — it may contain reflected
             # request fragments (incl. our own JWT parse errors). Surface
@@ -157,7 +187,7 @@ def handler(event: dict, context: LambdaContext) -> dict:
                     "watch_id": watch["watchId"],
                     "user_id_prefix": watch["userId"][:8],
                     "reason": str(e),
-                    "status": e.status,
+                    "status": getattr(e, "status", None),
                 },
             )
             # Continue — ADR 0003.

@@ -137,14 +137,33 @@ def _events(records, name):
 def test_handler_calls_both_mcps_for_each_active_watch(app_module, monkeypatch):
     app, watches, _, log = app_module
 
-    flight_resp = lambda rec: (200, _ok_payload({
-        "source": "fixture",
-        "offers": [{"id": "off_1", "totalAmount": 1284.5}],
-    }))
-    hotel_resp = lambda rec: (200, _ok_payload({
-        "source": "fixture",
-        "hotels": [{"id": "h_1", "totalAmount": 720, "stars": 4}],
-    }))
+    # Offers carry the full slice/segments shape compose_snapshot needs;
+    # otherwise T3's writer raises KeyError → watch_errored.
+    def _flight_offer():
+        return {
+            "id": "off_1", "totalAmount": "1284.50", "currency": "USD",
+            "slices": [
+                {"stops": 0, "segments": [{
+                    "airline": "UA", "flightNumber": "100",
+                    "departAt": "2026-10-15T10:00:00",
+                }]},
+                {"stops": 0, "segments": [{
+                    "airline": "UA", "flightNumber": "101",
+                    "departAt": "2026-10-20T17:00:00",
+                }]},
+            ],
+        }
+
+    def _hotel_offer():
+        return {
+            "id": "h_1", "totalAmount": "720.00", "currency": "USD",
+            "hotelName": "Test Hotel",
+            "checkin": "2026-10-15", "checkout": "2026-10-20",
+            "bookingDeepLink": "https://example.test/h_1",
+        }
+
+    flight_resp = lambda rec: (200, _ok_payload({"source": "fixture", "offers": [_flight_offer()]}))
+    hotel_resp  = lambda rec: (200, _ok_payload({"source": "fixture", "hotels": [_hotel_offer()]}))
 
     with _mock_mcp({"search_flight_offers": flight_resp}) as (fl_srv, fl_url), \
          _mock_mcp({"search_hotel_offers":  hotel_resp})  as (ht_srv, ht_url):
@@ -206,13 +225,31 @@ def test_one_failing_mcp_does_not_block_other_watches(app_module, monkeypatch):
     """
     app, watches, _, log = app_module
 
+    def _flight_offer(args):
+        return {
+            "id": "off_1", "totalAmount": "999.00", "currency": "USD",
+            "slices": [{"stops": 0, "segments": [{
+                "airline": "UA", "flightNumber": "1",
+                "departAt": args["departDate"] + "T10:00:00",
+            }]}],
+        }
+
     # Custom flights responder: 500 for `dest=Paris`, 200 for everything else.
     def flight_resp(record):
         if record["arguments"]["destination"] == "Paris":
             return 500, b'{"error":"upstream"}'
-        return 200, _ok_payload({"source": "fixture", "offers": [{"id": "off", "totalAmount": 999}]})
+        return 200, _ok_payload({"source": "fixture", "offers": [_flight_offer(record["arguments"])]})
 
-    hotel_resp = lambda _r: (200, _ok_payload({"source": "fixture", "hotels": []}))
+    # Hotels responder needs at least one valid hotel for compose_snapshot
+    # to produce a row; otherwise compose returns None (snapshot_skipped),
+    # which is a valid path but not what this test is asserting.
+    def hotel_resp(record):
+        args = record["arguments"]
+        return 200, _ok_payload({"source": "fixture", "hotels": [{
+            "id": "h_1", "totalAmount": "100.00", "currency": "USD",
+            "hotelName": "x", "checkin": args["checkin"], "checkout": args["checkout"],
+            "bookingDeepLink": "https://example.test/x",
+        }]})
 
     with _mock_mcp({"search_flight_offers": flight_resp}) as (fl_srv, fl_url), \
          _mock_mcp({"search_hotel_offers":  hotel_resp})  as (ht_srv, ht_url):

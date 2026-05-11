@@ -39,23 +39,32 @@ Companion to [`plan.md`](./plan.md). One checklist per task; tick as you go.
 
 ## Task 3 — Snapshot composer + FareHistory writer
 
-- [ ] `snapshot.compose_snapshot(watch, flight, hotel)` — cheapest-of-list, full schema, 90d ttl
-- [ ] `bestOfferBlob` per design-spec §3 (airline, flightNumber, stops, departDate, returnDate, hotelName, checkin, checkout, bookingDeepLink)
-- [ ] `writer.write_snapshot(snapshot)` — put_item on FareHistory
-- [ ] `app.handler()` calls compose → write per watch; logs flight/hotel/total
-- [ ] CDK: `fareHistoryTable.grantReadWriteData(pollerFn)`
-- [ ] **Multi-model gate (test design FIRST):** spawn `agent-skills:test-engineer` (Sonnet) to design snapshot edge cases
-- [ ] Tests (built to that design):
-  - [ ] `test_snapshot.py` — cheapest selection, empty offers, ttl correctness, bestOfferBlob field-by-field
-  - [ ] `test_writer.py` — round-trip compose → write → query
-  - [ ] `test_handler_writes_history.py` — moto + canned MCPs, assert FareHistory rows
-- [ ] `pytest` green
-- [ ] `npx cdk synth --quiet` green
+- [x] `snapshot.compose_snapshot(watch, flight, hotel)` — cheapest-of-list w/ deterministic id-tiebreaker, USD-only guard (raises on non-USD), zero-price exclusion, 90d ttl from frozen-clock-friendly `_now()` seam
+- [x] `bestOfferBlob` per design-spec §3 (airline, flightNumber, stops, departDate, returnDate, hotelName, checkin, checkout, bookingDeepLink)
+- [x] `bookingDeepLink` validated: 2KB cap + https-only scheme + null/missing → empty string
+- [x] `writer.write_snapshot(snapshot)` — put_item on FareHistory; idempotent at (watchId, timestamp)
+- [x] `app.handler()` calls compose → write per watch; logs `snapshot_written` / `snapshot_skipped`; per-watch try/except now also catches ValueError + KeyError
+- [x] CDK: `fareHistoryTable.grantReadWriteData(pollerFn)` + new `lambdaTimeoutSeconds` context override
+- [x] **Multi-model gate (test design FIRST):** `agent-skills:test-engineer` (Sonnet) designed 17+5 tests with explicit edge cases
+- [x] Tests (built to that design — 69/69 total):
+  - [x] `test_snapshot.py` (22) — cheapest+tiebreaker / empty / ttl / iso timestamp / sort order / blob field set / stops / non-USD / zero-price / deep-link validation (5 cases) / malformed offer
+  - [x] `test_writer.py` (6) — round-trip PK / blob field-by-field / Decimal price round-trip / TTL number type / idempotency via Query / missing-env fail-loud
+  - [x] `test_handler_writes_history.py` (3) — 3-watch happy path with exact totals / empty-flights soft skip / non-USD → watch_errored
+- [x] `pytest` green (69/69)
+- [~] `npx cdk synth` blocked by pre-existing Docker bundling (same as T1)
 
 ### → Checkpoint A
-- [ ] Pipeline runs end-to-end through persistence
-- [ ] **Spawn `agent-skills:code-reviewer` (Sonnet) on the full `lambdas/poller/` tree**
-- [ ] Address findings
+- [x] Pipeline runs end-to-end through persistence (verified by `test_three_active_watches_produce_three_fare_history_rows`)
+- [x] **Spawned `agent-skills:code-reviewer` (Sonnet) on the full `lambdas/poller/` tree** — verdict: fix-then-checkpoint
+- [x] Address findings:
+  - BLOCKER 1: stale `_poll_one` docstring → updated to T3 reality
+  - BLOCKER 2: `bookingDeepLink` injection path → added `_validate_deep_link` (2KB + https-only) + 5 new tests
+  - MAJOR: Lambda timeout vs N watches → new `lambdaTimeoutSeconds` CDK context override
+  - MAJOR: idempotency test used wrong scan filter form → switched to Query w/ `Key().eq()`
+  - MAJOR: `JWT_SIGNATURE_SECRET` carryover → TODO comment in stack pointing to ADR 0006 + threat model
+  - MAJOR: `_now` undocumented test seam → docstring added
+  - NIT: vestigial `time` re-export comment in mcp_client.py → removed
+  - NIT: `bookingDeepLink: null` could become `None` in DDB → guarded with `or ""`
 - [ ] Human approval before Task 4
 - [ ] Commit
 

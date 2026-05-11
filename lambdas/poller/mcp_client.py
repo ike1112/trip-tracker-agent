@@ -224,10 +224,9 @@ def derive_dates(date_window: dict) -> tuple[str, str]:
     return depart.isoformat(), return_dt.isoformat()
 
 
-# Re-exported so app.py can `from mcp_client import time` style things; here
-# we just keep the import from `time` alive for monkeypatching in tests.
 __all__ = [
     "MCP_TIMEOUT_SECONDS",
+    "MAX_RESPONSE_BYTES",
     "McpCallError",
     "call_flights",
     "call_hotels",

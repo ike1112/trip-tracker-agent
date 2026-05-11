@@ -98,6 +98,86 @@ def enumerator_module():
 
 
 @pytest.fixture
+def writer_module():
+    """Importable writer bound to a moto'd FareHistory table.
+
+    Returns `(writer, fare_history_table)` so tests can write a snapshot
+    and then read it back for round-trip assertions.
+    """
+    _set_env()
+    with mock_aws():
+        ddb = boto3.resource("dynamodb", region_name="us-east-1")
+        _create_tables(ddb)
+        (writer,) = _force_reimport("writer")
+        fare = ddb.Table(FARE_HISTORY_TABLE)
+        try:
+            yield writer, fare
+        finally:
+            sys.modules.pop("writer", None)
+
+
+def make_flight_offer(
+    offer_id: str = "off_1",
+    total: float | str = "1148.00",
+    currency: str = "USD",
+    airline: str = "UA",
+    flight_number: str = "874",
+    stops: int = 1,
+    depart_at: str = "2026-10-15T10:35:00",
+    return_depart_at: str = "2026-10-20T17:55:00",
+) -> dict:
+    """Synthetic Duffel-shaped offer for tests."""
+    return {
+        "id": offer_id,
+        "totalAmount": total,
+        "currency": currency,
+        "slices": [
+            {
+                "stops": stops,
+                "segments": [
+                    {
+                        "airline": airline,
+                        "flightNumber": flight_number,
+                        "departAt": depart_at,
+                    },
+                ],
+            },
+            {
+                "stops": 0,
+                "segments": [
+                    {
+                        "airline": airline,
+                        "flightNumber": "RET",
+                        "departAt": return_depart_at,
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def make_hotel_offer(
+    hotel_id: str = "h_1",
+    total: float | str = "485.00",
+    currency: str = "USD",
+    name: str = "Shibuya Business Hotel",
+    checkin: str = "2026-10-15",
+    checkout: str = "2026-10-20",
+    deep_link: str = "https://example.test/h_1",
+) -> dict:
+    """Synthetic LiteAPI-shaped hotel offer for tests."""
+    return {
+        "id": hotel_id,
+        "totalAmount": total,
+        "currency": currency,
+        "hotelName": name,
+        "checkin": checkin,
+        "checkout": checkout,
+        "bookingDeepLink": deep_link,
+    }
+
+
+@pytest.fixture
 def app_module():
     """Importable handler bound to mocked tables.
 
@@ -116,13 +196,16 @@ def app_module():
     with mock_aws():
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
         _create_tables(ddb)
-        # `app` imports `enumerator`, `jwt_signer`, `mcp_client`. Force a
-        # clean import so module-level boto3 / env-var bindings are fresh.
-        for name in ("enumerator", "jwt_signer", "mcp_client", "app"):
+        # `app` imports `enumerator`, `jwt_signer`, `mcp_client`,
+        # `snapshot`, `writer`. Force a clean import so module-level
+        # boto3 / env-var bindings are fresh.
+        for name in ("enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "app"):
             sys.modules.pop(name, None)
         importlib.import_module("enumerator")
         importlib.import_module("jwt_signer")
         importlib.import_module("mcp_client")
+        importlib.import_module("snapshot")
+        importlib.import_module("writer")
         app = importlib.import_module("app")
         log_handler = MemoryLogHandler()
         app.logger.addHandler(log_handler)
@@ -132,7 +215,7 @@ def app_module():
             yield app, watches, fare, log_handler
         finally:
             app.logger.removeHandler(log_handler)
-            for name in ("app", "enumerator", "jwt_signer", "mcp_client"):
+            for name in ("app", "enumerator", "jwt_signer", "mcp_client", "snapshot", "writer"):
                 sys.modules.pop(name, None)
 
 
