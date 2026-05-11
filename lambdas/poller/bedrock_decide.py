@@ -211,7 +211,7 @@ def decide(snapshot: dict, watch: dict, history: list[dict]) -> dict:
             accept="application/json",
         )
         raw = response["body"].read().decode("utf-8")
-    except Exception as e:  # pragma: no cover — exercised via mocked exceptions
+    except Exception as e:
         # Note: don't use `message` as an extra key — Python logging
         # reserves it on every LogRecord and raises KeyError on collision.
         logger.warning(

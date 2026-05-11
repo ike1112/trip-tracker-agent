@@ -101,13 +101,18 @@ def test_alert_true_when_both_threshold_and_anomaly_pass():
     assert result["alert"] is True
 
 
-def test_decide_does_not_call_bedrock_in_slice5(monkeypatch):
-    """Stub must not actually invoke Bedrock — slice 6's swap brings that."""
-    import boto3
+def test_decide_does_not_call_boto3_in_stub_mode(monkeypatch):
+    """Conftest sets BEDROCK_MODE=stub. The stub path must short-circuit
+    BEFORE bedrock_decide reaches its boto3 client. Patch the actual
+    factory `bedrock_decide._get_client` (not `boto3.client`, which the
+    cached singleton would bypass anyway) so a regression that flips
+    stub → live in this code path fails loudly."""
+    import bedrock_decide
 
-    def _no_boto(*_a, **_k):
-        raise AssertionError("decision.decide should not call boto3 in slice 5 stub")
+    def _no_client(*_a, **_k):
+        raise AssertionError("stub mode must not instantiate a boto3 client")
 
-    monkeypatch.setattr(boto3, "client", _no_boto)
+    monkeypatch.setattr(bedrock_decide, "_get_client", _no_client)
     # Should not trigger the assertion.
-    decision.decide(_snap(1200), _watch(max_total_price=Decimal("1500")), [])
+    result = decision.decide(_snap(1200), _watch(max_total_price=Decimal("1500")), [])
+    assert result == {"alert": True, "reason": "stub", "bedrock_called": True}

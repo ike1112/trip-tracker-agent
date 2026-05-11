@@ -17,6 +17,13 @@ import boto3
 import pytest
 from moto import mock_aws
 
+# Set BEDROCK_MODE=stub BEFORE any test module imports `bedrock_decide`
+# (or `decision`, which transitively imports it). The mode is read at
+# module load and tests that don't go through the `app_module` fixture
+# would otherwise inherit the real `live` default. test_bedrock_decide.py
+# overrides this per-test via its own reimport fixture.
+os.environ.setdefault("BEDROCK_MODE", "stub")
+
 
 class MemoryLogHandler(logging.Handler):
     """In-memory log handler used by tests to assert structured-log content.
@@ -74,6 +81,10 @@ def _set_env():
     os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
     os.environ["WATCHES_TABLE_NAME"] = WATCHES_TABLE
     os.environ["FARE_HISTORY_TABLE_NAME"] = FARE_HISTORY_TABLE
+    # Slice 6: keep tests in stub mode so no test ever burns a real
+    # Bedrock call. test_bedrock_decide.py's per-test fixture flips this
+    # to "live" with a mocked boto3 client when needed.
+    os.environ.setdefault("BEDROCK_MODE", "stub")
 
 
 def _force_reimport(*module_names):
@@ -219,7 +230,7 @@ def app_module():
         # `app` imports `enumerator`, `jwt_signer`, `mcp_client`,
         # `snapshot`, `writer`. Force a clean import so module-level
         # boto3 / env-var bindings are fresh.
-        for name in ("enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "history_window", "gates", "decision", "metrics", "app"):
+        for name in ("enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "history_window", "gates", "bedrock_decide", "decision", "metrics", "app"):
             sys.modules.pop(name, None)
         importlib.import_module("enumerator")
         importlib.import_module("jwt_signer")
@@ -228,6 +239,7 @@ def app_module():
         importlib.import_module("writer")
         importlib.import_module("history_window")
         importlib.import_module("gates")
+        importlib.import_module("bedrock_decide")
         importlib.import_module("decision")
         importlib.import_module("metrics")
         app = importlib.import_module("app")
@@ -239,7 +251,7 @@ def app_module():
             yield app, watches, fare, log_handler
         finally:
             app.logger.removeHandler(log_handler)
-            for name in ("app", "enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "history_window", "gates", "decision", "metrics"):
+            for name in ("app", "enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "history_window", "gates", "bedrock_decide", "decision", "metrics"):
                 sys.modules.pop(name, None)
 
 

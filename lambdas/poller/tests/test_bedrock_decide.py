@@ -270,13 +270,12 @@ def test_E3_system_message_contains_no_provider_controlled_strings():
 # Group F — Strict JSON parsing
 # ===========================================================================
 
-def _decide_with_model_text(bd, text: str, **decide_kwargs) -> dict:
+def _decide_with_model_text(bd, text: str) -> dict:
     """Call decide() in live mode with a mocked boto3 returning `text`."""
     mock_client = MagicMock()
     mock_client.invoke_model.return_value = _bedrock_response(text)
     with patch.object(bd, "_get_client", return_value=mock_client):
-        return bd.decide(_snap(), WATCH, [], **decide_kwargs) if decide_kwargs \
-            else bd.decide(_snap(), WATCH, [])
+        return bd.decide(_snap(), WATCH, [])
 
 
 def test_F1_valid_json_returns_alert_and_reason():

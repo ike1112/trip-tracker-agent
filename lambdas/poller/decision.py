@@ -1,27 +1,24 @@
 """
 Alert-worthiness decision for the trip-tracker poller.
 
-Slice 5: stubbed — returns `{"alert": True, "reason": "stub"}` whenever
-the gate cascade would have asked Bedrock the question. Slice 6 swaps
-the body for a real Bedrock Haiku 4.5 call (ADR 0004); the call sites
-in app.py do NOT change.
-
-Routing logic:
+Routing (design-spec §5):
   1. Dedup gate — if a recent alert hasn't decayed by ≥5%, return False
-     immediately. This is the anti-spam guard from design-spec §5; running
-     Bedrock in this branch would cost without producing a useful answer.
-  2. Threshold OR anomaly — if either gate passes, this is alert-worthy
-     enough to ask the model. In slice 5 the model is stubbed; in slice 6
-     the real call returns `{alert, reason}` from Bedrock.
-  3. Otherwise — no alert, reason names the missing condition.
+     immediately (anti-spam; running Bedrock here is wasted cost).
+  2. Threshold OR anomaly — if either passes, the candidate is worth the
+     model's attention. Delegates to `bedrock_decide.decide`, which
+     returns the final `{alert, reason, bedrock_called: True}`. In slice 5
+     that module was a local stub; in slice 6 it's a real Bedrock Haiku
+     4.5 call selected by the `BEDROCK_MODE` env var (ADR 0004).
+  3. Otherwise — no alert; reason names the missing condition.
 
-The return shape `{alert: bool, reason: str}` is the slice-7 Notifier's
-contract — `reason` is templated into the alert email so the user
-understands *why* the alert fired (the central design-spec §5 motivation).
+The return shape `{alert, reason, bedrock_called}` is the slice-7
+Notifier's contract — `reason` is templated into the alert email so the
+user understands *why* the alert fired (design-spec §5 motivation).
 """
 
 from __future__ import annotations
 
+import bedrock_decide
 from gates import is_anomaly, is_dedup_eligible, passes_threshold
 
 
@@ -29,14 +26,12 @@ def decide(snapshot: dict, watch: dict, history: list[dict]) -> dict:
     """Decide whether `snapshot` for `watch` is alert-worthy.
 
     Returns `{"alert": bool, "reason": str, "bedrock_called": bool}`:
-      - `alert`/`reason` is always present and non-empty so the Notifier
+      - `alert`/`reason` always present and non-empty so the Notifier
         has something to say.
-      - `bedrock_called` is True iff the dedup + (threshold OR anomaly)
-        gates would have triggered a Bedrock call. In slice 5 the model
-        is stubbed so no real call happens; this flag lets the handler
-        emit `bedrock_decisions_made` honestly (only when the model
-        would actually be invoked) without forcing the metric placement
-        to drift between slice 5 stub and slice 6 real implementation.
+      - `bedrock_called` is True iff the model layer was reached (i.e.,
+        dedup + at least one of threshold/anomaly passed). Pre-gate
+        skips return False so the `bedrock_decisions_made` metric only
+        increments when an actual model invocation happened.
     """
     if not is_dedup_eligible(snapshot, watch):
         return {"alert": False, "reason": "dedup_blocked", "bedrock_called": False}
@@ -47,7 +42,8 @@ def decide(snapshot: dict, watch: dict, history: list[dict]) -> dict:
     if not (threshold_pass or anomaly_pass):
         return {"alert": False, "reason": "no_gate_passed", "bedrock_called": False}
 
-    # Slice 6 replaces this body with a Bedrock call returning a real
-    # reason string. Until then, the routing above is the actual logic
-    # under test; the stub below is a placeholder for the model's answer.
-    return {"alert": True, "reason": "stub", "bedrock_called": True}
+    # Delegate to bedrock_decide — returns the same {alert, reason,
+    # bedrock_called: True} shape in stub mode, live success, AND the
+    # defensive-fallback path. The metric is honest about the attempt
+    # regardless of whether the call succeeded.
+    return bedrock_decide.decide(snapshot, watch, history)
