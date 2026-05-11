@@ -103,15 +103,26 @@ def app_module():
 
     Returns `(app, watches_tbl, fare_tbl, log_handler)` — the handler's
     `.records` list collects every log record emitted during the call.
+
+    Sets `JWT_SIGNATURE_SECRET` and placeholder MCP endpoints so the
+    handler can construct (T2 onward); tests that need to exercise the
+    MCP code path override the endpoints to point at a real mock server
+    (see `test_handler_with_mcp.py`).
     """
     _set_env()
+    os.environ["JWT_SIGNATURE_SECRET"] = "test-secret-aaaaaaaaaaaaaaaaaaaaa"
+    os.environ.setdefault("FLIGHTS_MCP_ENDPOINT", "http://127.0.0.1:1/flights")
+    os.environ.setdefault("HOTELS_MCP_ENDPOINT", "http://127.0.0.1:1/hotels")
     with mock_aws():
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
         _create_tables(ddb)
-        # `app` imports `enumerator`, so reimport both in the right order.
-        sys.modules.pop("enumerator", None)
-        sys.modules.pop("app", None)
+        # `app` imports `enumerator`, `jwt_signer`, `mcp_client`. Force a
+        # clean import so module-level boto3 / env-var bindings are fresh.
+        for name in ("enumerator", "jwt_signer", "mcp_client", "app"):
+            sys.modules.pop(name, None)
         importlib.import_module("enumerator")
+        importlib.import_module("jwt_signer")
+        importlib.import_module("mcp_client")
         app = importlib.import_module("app")
         log_handler = MemoryLogHandler()
         app.logger.addHandler(log_handler)
@@ -121,8 +132,8 @@ def app_module():
             yield app, watches, fare, log_handler
         finally:
             app.logger.removeHandler(log_handler)
-            sys.modules.pop("app", None)
-            sys.modules.pop("enumerator", None)
+            for name in ("app", "enumerator", "jwt_signer", "mcp_client"):
+                sys.modules.pop(name, None)
 
 
 def _dec(value):

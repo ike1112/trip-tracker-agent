@@ -21,20 +21,20 @@ Companion to [`plan.md`](./plan.md). One checklist per task; tick as you go.
 
 ## Task 2 — Internal JWT signer + MCP HTTP client
 
-- [ ] `jwt_signer.py` — HS256, sub=`travel-agent`, user_id claim, 5-minute TTL
-- [ ] `mcp_client.py` — JSON-RPC tools/call via `urllib.request`, 15s timeout
-- [ ] `McpCallError` exception + handler-side try/except (one bad watch doesn't break the loop)
-- [ ] Date math helper: `dateWindow → {departDate, returnDate, pax, nights}` for both MCPs
-- [ ] `app.handler()` extended: per watch, sign JWT once, call both MCPs, log offer counts
-- [ ] CDK env vars: `JWT_SIGNATURE_SECRET`, `FLIGHTS_MCP_ENDPOINT`, `HOTELS_MCP_ENDPOINT`
-- [ ] Pass endpoints in from `lib/strands-agent-on-lambda-stack.js`
-- [ ] Tests:
-  - [ ] `test_jwt_signer.py` — round-trip with mcp-authorizer's verify path; tampered token fails; missing secret fails clearly
-  - [ ] `test_mcp_client.py` — success / 5xx / timeout / malformed JSON
-  - [ ] `test_handler_with_mcp.py` — `http.server.HTTPServer` thread, 3 active watches, 6 successful calls
-- [ ] `pytest` green
-- [ ] **Multi-model gate:** spawn `agent-skills:security-auditor` (Sonnet) on jwt_signer + mcp_client
-- [ ] Address findings
+- [x] `jwt_signer.py` — HS256, sub=`travel-agent`, user_id claim, 5-minute TTL, missing-secret guard
+- [x] `mcp_client.py` — JSON-RPC tools/call via `urllib.request`, 15s timeout, **2MB response cap**, **no-redirect handler**
+- [x] `McpCallError` exception + handler-side try/except (one bad watch doesn't break the loop)
+- [x] Date math helper: `dateWindow → {departDate, returnDate, pax, nights}` for both MCPs (Decimal-safe)
+- [x] `app.handler()` extended: per watch, sign JWT once, call both MCPs, log offer counts; endpoints validated at handler entry
+- [x] CDK env vars: `JWT_SIGNATURE_SECRET`, `FLIGHTS_MCP_ENDPOINT`, `HOTELS_MCP_ENDPOINT`
+- [x] Pass endpoints in from `lib/strands-agent-on-lambda-stack.js`
+- [x] Tests (38/38 total):
+  - [x] `test_jwt_signer.py` (7) — round-trip + tampered + expired + missing-secret + empty-user + custom-ttl + alg=none rejection
+  - [x] `test_mcp_client.py` (16) — success / 4xx / 5xx / timeout / malformed / jsonrpc-error / missing-result / empty-content / payload-not-json + date math (incl. Decimal nights)
+  - [x] `test_handler_with_mcp.py` (8) — happy path, error isolation, empty table, **wrong-sub rejection**, **error-body not in log**, **endpoints required**
+- [x] `pytest` green
+- [x] **Multi-model gate:** spawn `agent-skills:security-auditor` (Sonnet) — verdict fix-then-ship
+- [x] Address findings (response cap + redirect block + endpoint validation + body-not-in-log + alg=none/sub-rejection tests). HIGH (shared secret) and MED-3 (agent token TTL) are pre-existing slice-1 issues, deferred to ADR 0006 in slice 9 — already documented in threat model line 64.
 - [ ] Commit
 
 ## Task 3 — Snapshot composer + FareHistory writer
