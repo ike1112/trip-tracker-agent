@@ -98,6 +98,26 @@ def enumerator_module():
 
 
 @pytest.fixture
+def history_window_module():
+    """Importable history_window bound to a moto'd FareHistory table.
+
+    Returns `(history_window, fare_history_table)` so tests can populate
+    rows with known timestamps and assert query results.
+    """
+    _set_env()
+    with mock_aws():
+        ddb = boto3.resource("dynamodb", region_name="us-east-1")
+        _create_tables(ddb)
+        sys.modules.pop("history_window", None)
+        history_window = importlib.import_module("history_window")
+        fare = ddb.Table(FARE_HISTORY_TABLE)
+        try:
+            yield history_window, fare
+        finally:
+            sys.modules.pop("history_window", None)
+
+
+@pytest.fixture
 def writer_module():
     """Importable writer bound to a moto'd FareHistory table.
 
@@ -199,13 +219,17 @@ def app_module():
         # `app` imports `enumerator`, `jwt_signer`, `mcp_client`,
         # `snapshot`, `writer`. Force a clean import so module-level
         # boto3 / env-var bindings are fresh.
-        for name in ("enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "app"):
+        for name in ("enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "history_window", "gates", "decision", "metrics", "app"):
             sys.modules.pop(name, None)
         importlib.import_module("enumerator")
         importlib.import_module("jwt_signer")
         importlib.import_module("mcp_client")
         importlib.import_module("snapshot")
         importlib.import_module("writer")
+        importlib.import_module("history_window")
+        importlib.import_module("gates")
+        importlib.import_module("decision")
+        importlib.import_module("metrics")
         app = importlib.import_module("app")
         log_handler = MemoryLogHandler()
         app.logger.addHandler(log_handler)
@@ -215,7 +239,7 @@ def app_module():
             yield app, watches, fare, log_handler
         finally:
             app.logger.removeHandler(log_handler)
-            for name in ("app", "enumerator", "jwt_signer", "mcp_client", "snapshot", "writer"):
+            for name in ("app", "enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "history_window", "gates", "decision", "metrics"):
                 sys.modules.pop(name, None)
 
 

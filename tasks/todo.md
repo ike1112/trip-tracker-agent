@@ -70,20 +70,21 @@ Companion to [`plan.md`](./plan.md). One checklist per task; tick as you go.
 
 ## Task 4 — Gates + decision stub + CloudWatch metrics
 
-- [ ] `gates.py` — three pure functions (dedup, threshold, anomaly) + named constants for thresholds
-- [ ] `history_window.py` — `get_window(watch_id, since_iso)` Query helper
-- [ ] `decision.py` — stubbed `decide()` returning `{alert: True, reason: "stub"}` post-gates
-- [ ] `metrics.py` — powertools Metrics, namespace `TripTracker/Poller`, four metric names
-- [ ] `app.handler()` wired through; per-watch decision logged
-- [ ] **Multi-model gate (test design FIRST):** spawn `agent-skills:test-engineer` (Sonnet) for gate boundaries
-- [ ] Tests (built to that design):
-  - [ ] `test_gates.py` — table-driven boundary cases per gate
-  - [ ] `test_history_window.py` — Query bounds + ordering
-  - [ ] `test_decision.py` — alert / no-alert paths, reason always present
-  - [ ] `test_metrics.py` — parse EMF JSON from stdout, assert four names + counts
-  - [ ] `test_handler_decides.py` — full pipeline; low total → alerts_sent=1; high total → 0
-- [ ] `pytest` green
-- [ ] **Multi-model gate:** `agent-skills:code-reviewer` (Sonnet) on the gate logic
+- [x] `gates.py` — three pure functions (dedup strict `<`, threshold strict `<`, anomaly = `≤` median branch OR `<` new-low) + `DEDUP_DISCOUNT=0.95` / `ANOMALY_MEDIAN_DISCOUNT=0.85` constants
+- [x] `history_window.py` — `get_window(watch_id, since_iso)` Query helper, exclusive `>` boundary, **paginated for safety**
+- [x] `decision.py` — stubbed `decide()` returning `{alert: True, reason: "stub"}` post-gates, otherwise `{alert: False, reason: <gate>}`
+- [x] `metrics.py` — powertools Metrics, namespace `TripTracker/Poller`, four metric names + `increment` helper
+- [x] `app.handler()` wired through: history fetched BEFORE write (exclusive `>` boundary naturally excludes the new row); per-watch decision logged; metrics flushed at end
+- [x] **Multi-model gate (test design FIRST):** `agent-skills:test-engineer` (Sonnet) designed 20+7+6+7+6 = 46 tests with explicit boundary cases
+- [x] Tests (built to that design):
+  - [x] `test_gates.py` (21) — boundary at exactly 0.95×, 0.85×, equal-to-min, even/odd median, defensive missing-field
+  - [x] `test_history_window.py` (7) — boundary exclusivity, descending order, scoped-to-watch, missing-env guard
+  - [x] `test_decision.py` (7) — gate routing matrix, parametrized scenarios, no-Bedrock-in-stub
+  - [x] `test_metrics.py` (6) — namespace, all four names, counts, reset-between-flush, omit-zero behaviour
+  - [x] `test_handler_decides.py` (6) — low/high totals, empty history, dedup blocks, count semantics, MCP error increments errored
+- [x] `pytest` green (120/120)
+- [x] **Multi-model gate:** `agent-skills:code-reviewer` (Sonnet) — verdict request changes
+- [x] Address findings: paginated `get_window`, restructured handler so `cutoff` is computed before write (eliminates fragile equality filter), clarified comment in `passes_threshold` about None handling, fixed misleading test comment
 - [ ] Commit
 
 ## Task 5 — EventBridge enable + ADR 0003 + threat model + e2e

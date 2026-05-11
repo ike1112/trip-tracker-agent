@@ -5,7 +5,7 @@ Slice 5 progress (per `tasks/slice-5-poller.plan.md`):
   ✅ T1: walking skeleton — enumerate active watches and log each.
   ✅ T2: per-watch MCP calls (flights + hotels) with internal JWT auth.
   ✅ T3: snapshot composer + FareHistory writer per watch.
-  🚧 T4: gates + decision stub + CloudWatch metrics.
+  ✅ T4: gates + decision stub + CloudWatch metrics.
   ⏭ T5: EventBridge enable + ADR 0003 + threat model + e2e.
 
 The handler runs sequentially per ADR 0003 — one watch at a time, one MCP
@@ -19,11 +19,15 @@ from `event` and never trusts it.
 """
 
 import os
+from datetime import datetime, timedelta, timezone
 
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+import metrics
+from decision import decide
 from enumerator import iter_active_watches
+from history_window import get_window
 from jwt_signer import sign_for_user
 from mcp_client import (
     McpCallError,
@@ -35,6 +39,9 @@ from snapshot import compose_snapshot
 from writer import write_snapshot
 
 logger = Logger(service="trip-tracker-poller")
+
+# 30-day window for the anomaly gate (design-spec §5).
+ANOMALY_WINDOW_DAYS = 30
 
 FLIGHTS_MCP_ENDPOINT = os.environ.get("FLIGHTS_MCP_ENDPOINT")
 HOTELS_MCP_ENDPOINT = os.environ.get("HOTELS_MCP_ENDPOINT")
@@ -126,8 +133,8 @@ def _poll_one(watch: dict) -> None:
     )
 
     # T3: compose + write the FareHistory snapshot. compose_snapshot()
-    # returns None when either side has no qualifying offers — we log and
-    # treat as a soft skip (no metric increment yet; T4 wires the metrics).
+    # returns None when either side has no qualifying offers — log it as
+    # a soft skip and stop here (no decision to make).
     snapshot = compose_snapshot(watch, flights_payload, hotels_payload)
     if snapshot is None:
         logger.info(
@@ -135,6 +142,16 @@ def _poll_one(watch: dict) -> None:
             extra={**log_extra, "reason": "no_qualifying_offers"},
         )
         return
+    # T4: pull the 30-day anomaly window BEFORE writing the new row. With
+    # `cutoff = now - 30d` and the just-composed snapshot's timestamp =
+    # `now`, the new row's timestamp is strictly > cutoff. So when the
+    # subsequent query runs `timestamp > cutoff`, the boundary is "rows
+    # written between cutoff and now", and the just-written row is the
+    # only thing AT `now` — naturally excluded because we query before
+    # writing. No fragile equality filter needed.
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=ANOMALY_WINDOW_DAYS)).isoformat()
+    history = get_window(watch_id, cutoff)
+
     write_snapshot(snapshot)
     logger.info(
         "snapshot_written",
@@ -145,6 +162,20 @@ def _poll_one(watch: dict) -> None:
             "total_price":  str(snapshot["totalPrice"]),
         },
     )
+
+    decision = decide(snapshot, watch, history)
+    metrics.increment(metrics.BEDROCK_DECISIONS_MADE)
+    logger.info(
+        "decision_made",
+        extra={
+            **log_extra,
+            "alert": decision["alert"],
+            "reason": decision["reason"],
+            "history_size": len(history),
+        },
+    )
+    if decision["alert"]:
+        metrics.increment(metrics.ALERTS_SENT)
 
 
 def handler(event: dict, context: LambdaContext) -> dict:
@@ -160,6 +191,7 @@ def handler(event: dict, context: LambdaContext) -> dict:
     errored = 0
     for watch in iter_active_watches():
         polled += 1
+        metrics.increment(metrics.WATCHES_POLLED)
         logger.info(
             "watch_polled",
             extra={
@@ -172,11 +204,13 @@ def handler(event: dict, context: LambdaContext) -> dict:
             _poll_one(watch)
         except (McpCallError, ValueError, KeyError) as e:
             # McpCallError: transport / HTTP / envelope failures (T2).
-            # ValueError: snapshot composer rejects non-USD currency (T3).
-            # KeyError: malformed offer (missing slices/segments) (T3).
-            # All of these are "this watch couldn't be processed; skip and
-            # continue with the next" per ADR 0003.
+            # ValueError: snapshot composer rejects non-USD currency or
+            #             unsafe deep link (T3).
+            # KeyError:   malformed offer (missing slices/segments) (T3).
+            # All of these are "this watch couldn't be processed; skip
+            # and continue with the next" per ADR 0003.
             errored += 1
+            metrics.increment(metrics.WATCHES_ERRORED)
             # Deliberately do NOT log `e.body` — it may contain reflected
             # request fragments (incl. our own JWT parse errors). Surface
             # only the categorised reason + HTTP status. See security audit
@@ -196,4 +230,8 @@ def handler(event: dict, context: LambdaContext) -> dict:
         "poll_complete",
         extra={"watches_polled": polled, "watches_errored": errored},
     )
+    # Flush all four metrics in one shot. Powertools writes the EMF blob
+    # to stdout; CloudWatch parses it server-side. Done after the loop
+    # so a partial poll still gets the metrics that fired before failure.
+    metrics.metrics.flush_metrics()
     return {"watches_polled": polled, "watches_errored": errored}
