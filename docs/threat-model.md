@@ -139,6 +139,33 @@ calling out, not a re-listing of [3].
   characters) as a second-layer defense against prompt-injection in user-
   generated property descriptions.
 
+### [5] Poller → AWS services + MCPs
+
+The trip-tracker poller (slice 5) is a second internal caller of the MCP
+boundary [2]. EventBridge invokes it on a 4-hour cron; per invocation it
+walks every active `Watches` row, signs an HS256 JWT scoped to that
+watch's owner, and calls flights-mcp + hotels-mcp. The poller writes
+`FareHistory` snapshots to DDB and (slice 6+) will invoke Bedrock for
+the alert decision.
+
+| Threat | Mitigation |
+|---|---|
+| Compromised poller mints tokens that the authorizer accepts as the agent | Pre-existing — both components share `JWT_SIGNATURE_SECRET` and present the same `sub: "travel-agent"` claim. The authorizer cannot tell agent-minted tokens from poller-minted tokens; per-component `sub` values + per-component secrets are the slice-9 fix (ADR 0006). The stack file carries an explicit `TODO(slice-9)` comment so this can't quietly survive. |
+| One bad watch's MCP failure starves all the others | **Sequential per-watch loop with per-watch try/except (ADR 0003).** `McpCallError`, `ValueError`, `KeyError` are categorised and skipped; `watches_errored` metric increments; the loop continues. Verified by `tests/test_handler_with_mcp.py::test_one_failing_mcp_does_not_block_other_watches`. |
+| Cron-triggered code parses untrusted user input from the EventBridge event | The handler does not read any field from the `event` payload — schedule envelopes are ignored. The only inputs are the DDB rows themselves and the MCP responses, both of which are validated downstream. |
+| MCP-response prompt injection / payload bombs | T2's `_NoRedirectHandler` blocks SSRF via redirect; `MAX_RESPONSE_BYTES = 2MB` cap on the body; T3's `_validate_deep_link` rejects non-`https://` and >2KB strings before they land in DDB. |
+| Currency drift silently corrupts the FareHistory price series | T3's snapshot composer raises `ValueError` on any non-USD `currency` field in any offer/hotel — caught as `watch_errored`. Mirrors the LiteAPI live-client posture in [3b]. |
+| New row poisoning its own anomaly baseline | T4's history window is fetched **before** writing the new snapshot; the exclusive `>` boundary in `get_window` then naturally excludes anything written at exactly `now`. No fragile equality filter needed. |
+| Anomaly history truncated by DDB pagination | T4's `get_window` follows `LastEvaluatedKey` so a watch with months of history doesn't silently see only the first 1MB page. |
+| Reflected MCP error body leaks reflected request fragments to logs | The `watch_errored` log explicitly omits `e.body`; only the categorised `reason` + HTTP status are surfaced. Verified by `test_handler_with_mcp.py::test_watch_errored_log_does_not_carry_response_body`. |
+| Concurrent EventBridge ticks fan out parallel pollers | Lambda `reservedConcurrentExecutions = 1` queues a second invocation rather than running it. Free defence against accidental cron-config drift. |
+
+**What would change for production:** per-component JWT signing secrets
+(ADR 0006 in slice 9) so a compromised poller cannot mint tokens that
+look like the agent and vice versa; per-watch IAM scoping if multi-tenant
+work ever lands; a poller-specific X-Ray service map node so the cron
+trace is independently visible from the chat path.
+
 ### [4] Lambda → AWS services
 
 | Threat | Mitigation |
@@ -168,3 +195,10 @@ These are real risks the codebase does not address, by design for v1:
 - **2026-05-10** — slice 4: appended [3b] for the LiteAPI boundary
   (latency budget, currency strictness, top-N cap, prompt-injection in
   hotel descriptions).
+- **2026-05-10** — slice 5: appended [5] for the poller as a second
+  internal JWT minter and second crosser of boundary [2]. ADR 0003
+  documents the sequential-loop isolation guarantee called out in this
+  section. The shared-secret risk is now triple-tracked: original
+  Secrets row (line 64), this section's first row, and a `TODO(slice-9)`
+  comment in `lib/strands-agent-on-lambda-stack.js` — ADR 0006 will
+  resolve it.

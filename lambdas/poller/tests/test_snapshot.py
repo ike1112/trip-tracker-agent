@@ -267,6 +267,18 @@ def test_non_usd_hotel_offer_raises_value_error():
         snapshot.compose_snapshot(WATCH, flights, hotels)
 
 
+def test_missing_currency_field_raises_not_silently_treated_as_usd():
+    """A provider response without a `currency` field is as untrustworthy
+    as one with a wrong currency — both must fail loud."""
+    bad_flight = make_flight_offer()
+    bad_flight.pop("currency", None)
+    flights = {"source": "live", "offers": [bad_flight]}
+    hotels = {"source": "fixture", "hotels": [make_hotel_offer()]}
+
+    with pytest.raises(ValueError, match="unsupported_currency.*None"):
+        snapshot.compose_snapshot(WATCH, flights, hotels)
+
+
 # ---------------------------------------------------------------------------
 # Zero-price exclusion.
 # ---------------------------------------------------------------------------
@@ -333,6 +345,21 @@ def test_missing_deep_link_becomes_empty_string_not_none():
     snap = snapshot.compose_snapshot(WATCH, flights, hotels)
 
     assert snap["bestOfferBlob"]["bookingDeepLink"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Constant-value pinning — protects design-spec §3 / §5 numeric choices
+# from silent drift.
+# ---------------------------------------------------------------------------
+
+def test_ttl_days_constant_pins_to_90():
+    """Spec §3: FareHistory TTL is 90 days. Anomaly gate's 30-day window
+    needs at least this much history, with comfortable buffer."""
+    assert snapshot.TTL_DAYS == 90
+
+
+def test_max_deep_link_bytes_constant_pins_to_2KB():
+    assert snapshot.MAX_DEEP_LINK_BYTES == 2048
 
 
 def test_null_deep_link_becomes_empty_string_not_none():

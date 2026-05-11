@@ -25,7 +25,7 @@ def _hist(*totals):
 
 def test_alert_true_when_dedup_passes_and_threshold_passes():
     result = decision.decide(_snap(1200), _watch(max_total_price=Decimal("1500")), [])
-    assert result == {"alert": True, "reason": "stub"}
+    assert result == {"alert": True, "reason": "stub", "bedrock_called": True}
 
 
 def test_alert_true_when_dedup_passes_and_anomaly_passes_only():
@@ -35,7 +35,7 @@ def test_alert_true_when_dedup_passes_and_anomaly_passes_only():
         _watch(max_total_price=Decimal("100")),  # threshold won't pass
         _hist(1000),  # median = 1000; 85% × 1000 = 850 → anomaly
     )
-    assert result == {"alert": True, "reason": "stub"}
+    assert result == {"alert": True, "reason": "stub", "bedrock_called": True}
 
 
 def test_alert_false_when_dedup_blocks_even_if_threshold_would_pass():
@@ -48,6 +48,9 @@ def test_alert_false_when_dedup_blocks_even_if_threshold_would_pass():
     )
     assert result["alert"] is False
     assert result["reason"] == "dedup_blocked"
+    # Critical for slice-6 metric correctness: dedup-blocked watches
+    # must NOT count as Bedrock invocations.
+    assert result["bedrock_called"] is False
 
 
 def test_alert_false_when_neither_threshold_nor_anomaly_passes():
@@ -58,6 +61,8 @@ def test_alert_false_when_neither_threshold_nor_anomaly_passes():
     )
     assert result["alert"] is False
     assert result["reason"] == "no_gate_passed"
+    # Same — no model call when neither gate would justify the cost.
+    assert result["bedrock_called"] is False
 
 
 @pytest.mark.parametrize("scenario", [

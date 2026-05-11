@@ -91,22 +91,20 @@ def _hotel_offer(args, total="300.00"):
     }
 
 
-def _captured_emf(app_module):
+def _captured_emf(monkeypatch):
     """Hook into powertools to capture EMF before the handler's flush
-    clears it. Returns a list that test code populates by patching
-    `metrics.flush_metrics`."""
+    clears it. Returns the captured-list. monkeypatch handles restoration
+    so a failing assertion can't leave the patch in place across tests.
+    """
     captured = []
     import metrics as metrics_module
-    original_flush = metrics_module.metrics.flush_metrics
 
     def _capture():
-        emf = metrics_module.metrics.serialize_metric_set()
-        captured.append(emf)
-        # Now actually flush (clears internal state).
+        captured.append(metrics_module.metrics.serialize_metric_set())
         metrics_module.metrics.clear_metrics()
 
-    metrics_module.metrics.flush_metrics = _capture
-    return captured, original_flush, metrics_module
+    monkeypatch.setattr(metrics_module.metrics, "flush_metrics", _capture)
+    return captured
 
 
 def _emf_value(emf: dict, name: str) -> int:
@@ -125,7 +123,7 @@ def _emf_value(emf: dict, name: str) -> int:
 
 def test_low_total_watch_increments_alerts_sent(app_module, monkeypatch):
     app, watches, _fare, log = app_module
-    captured, original, mm = _captured_emf(app)
+    captured = _captured_emf(monkeypatch)
 
     # Total = 1200 + 300 = 1500; max=2000 → threshold passes → alert.
     f_resp = lambda _t, args: (200, _ok({"source": "fixture", "offers": [_flight_offer(args, total="1200.00")]}))
@@ -138,7 +136,6 @@ def test_low_total_watch_increments_alerts_sent(app_module, monkeypatch):
         watches.put_item(Item=make_watch("u1", "w-low", max_total_price=2000.0))
         app.handler({}, None)
 
-    mm.metrics.flush_metrics = original
     assert len(captured) == 1
     emf = captured[0]
     assert _emf_value(emf, "watches_polled") == 1
@@ -153,7 +150,7 @@ def test_low_total_watch_increments_alerts_sent(app_module, monkeypatch):
 
 def test_high_total_watch_does_not_increment_alerts_sent(app_module, monkeypatch):
     app, watches, _fare, log = app_module
-    captured, original, mm = _captured_emf(app)
+    captured = _captured_emf(monkeypatch)
 
     # Total 1500; max 1000 → threshold fails. No history → anomaly false.
     f_resp = lambda _t, args: (200, _ok({"source": "fixture", "offers": [_flight_offer(args, total="1200.00")]}))
@@ -166,11 +163,12 @@ def test_high_total_watch_does_not_increment_alerts_sent(app_module, monkeypatch
         watches.put_item(Item=make_watch("u1", "w-high", max_total_price=1000.0))
         app.handler({}, None)
 
-    mm.metrics.flush_metrics = original
     emf = captured[0]
     assert _emf_value(emf, "watches_polled") == 1
-    assert _emf_value(emf, "bedrock_decisions_made") == 1  # we still asked
-    assert _emf_value(emf, "alerts_sent") == 0             # …and got "no"
+    # No gate passed → decide() didn't reach the (stubbed) Bedrock call,
+    # so this counter stays at 0.
+    assert _emf_value(emf, "bedrock_decisions_made") == 0
+    assert _emf_value(emf, "alerts_sent") == 0
 
     decision_logs = [r for r in log.records if r.msg == "decision_made"]
     assert decision_logs[0].alert is False
@@ -179,7 +177,7 @@ def test_high_total_watch_does_not_increment_alerts_sent(app_module, monkeypatch
 def test_watch_with_empty_history_anomaly_returns_false_not_error(app_module, monkeypatch):
     """Pin the spec acceptance criterion: empty history doesn't crash."""
     app, watches, _fare, log = app_module
-    captured, original, mm = _captured_emf(app)
+    captured = _captured_emf(monkeypatch)
 
     # Total above max so threshold doesn't carry; history empty for new watch.
     f_resp = lambda _t, args: (200, _ok({"source": "fixture", "offers": [_flight_offer(args, total="1500.00")]}))
@@ -193,7 +191,6 @@ def test_watch_with_empty_history_anomaly_returns_false_not_error(app_module, mo
         # Should not raise — anomaly gate handles empty list.
         app.handler({}, None)
 
-    mm.metrics.flush_metrics = original
     emf = captured[0]
     assert _emf_value(emf, "watches_errored") == 0
     assert _emf_value(emf, "alerts_sent") == 0
@@ -202,7 +199,7 @@ def test_watch_with_empty_history_anomaly_returns_false_not_error(app_module, mo
 def test_dedup_blocks_alert_for_recently_alerted_price(app_module, monkeypatch):
     """At ≥0.95 × lastAlertedPrice, dedup gates blocks even if threshold passes."""
     app, watches, _fare, log = app_module
-    captured, original, mm = _captured_emf(app)
+    captured = _captured_emf(monkeypatch)
 
     # New total = 1100; lastAlertedPrice = 1100 → 0.95×1100 = 1045 → 1100 > 1045 → dedup blocks.
     f_resp = lambda _t, args: (200, _ok({"source": "fixture", "offers": [_flight_offer(args, total="900.00")]}))
@@ -218,7 +215,6 @@ def test_dedup_blocks_alert_for_recently_alerted_price(app_module, monkeypatch):
         ))
         app.handler({}, None)
 
-    mm.metrics.flush_metrics = original
     emf = captured[0]
     assert _emf_value(emf, "alerts_sent") == 0
     decisions = [r for r in log.records if r.msg == "decision_made"]
@@ -228,7 +224,7 @@ def test_dedup_blocks_alert_for_recently_alerted_price(app_module, monkeypatch):
 
 def test_watches_polled_increments_once_per_active_watch(app_module, monkeypatch):
     app, watches, _fare, _log = app_module
-    captured, original, mm = _captured_emf(app)
+    captured = _captured_emf(monkeypatch)
 
     f_resp = lambda _t, args: (200, _ok({"source": "fixture", "offers": [_flight_offer(args)]}))
     h_resp = lambda _t, args: (200, _ok({"source": "fixture", "hotels": [_hotel_offer(args)]}))
@@ -244,7 +240,6 @@ def test_watches_polled_increments_once_per_active_watch(app_module, monkeypatch
 
         app.handler({}, None)
 
-    mm.metrics.flush_metrics = original
     emf = captured[0]
     assert _emf_value(emf, "watches_polled") == 3
     assert _emf_value(emf, "watches_errored") == 0
@@ -252,7 +247,7 @@ def test_watches_polled_increments_once_per_active_watch(app_module, monkeypatch
 
 def test_watches_errored_increments_when_mcp_returns_500(app_module, monkeypatch):
     app, watches, _fare, _log = app_module
-    captured, original, mm = _captured_emf(app)
+    captured = _captured_emf(monkeypatch)
 
     f_resp = lambda _t, _args: (500, b'{"error":"upstream"}')
     h_resp = lambda _t, args:  (200, _ok({"source": "fixture", "hotels": [_hotel_offer(args)]}))
@@ -264,7 +259,6 @@ def test_watches_errored_increments_when_mcp_returns_500(app_module, monkeypatch
         watches.put_item(Item=make_watch("u1", "w1"))
         app.handler({}, None)
 
-    mm.metrics.flush_metrics = original
     emf = captured[0]
     assert _emf_value(emf, "watches_polled") == 1
     assert _emf_value(emf, "watches_errored") == 1

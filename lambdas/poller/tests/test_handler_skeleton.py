@@ -90,6 +90,14 @@ def test_handler_emits_poll_complete_with_count(app_module, monkeypatch):
     assert completes[0].watches_errored == 5
 
 
+def test_anomaly_window_days_constant_pins_to_30(app_module):
+    """Spec §5 says the anomaly gate looks at the 30-day median + 30-day
+    low. The constant lives in `app.py` because it's a pipeline-level
+    knob (not a gate-internal one); pin it here so a silent edit fails."""
+    app, _watches, _fare, _log = app_module
+    assert app.ANOMALY_WINDOW_DAYS == 30
+
+
 def test_handler_returns_zero_for_no_active_watches(app_module, monkeypatch):
     app, watches, _, log = app_module
     monkeypatch.setattr(app, "FLIGHTS_MCP_ENDPOINT", "http://127.0.0.1:1/dead")

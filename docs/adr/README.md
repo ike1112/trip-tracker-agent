@@ -7,7 +7,7 @@ Format follows Michael Nygard's "Context / Decision / Consequences."
 |----|---|---|
 | [0001](./0001-user-scoped-tools-via-closure-factory.md) | User-scoped tools via closure factory | 2 |
 | [0002](./0002-fixture-replay-mode.md) | Fixture replay mode for external-API MCP servers | 3 |
-| 0003 | Sequential per-watch poll loop | 5 (planned) |
+| [0003](./0003-sequential-poll-loop.md) | Sequential per-watch poll loop | 5 |
 | 0004 | Bedrock decision call as alert-worthiness gate | 6 (planned) |
 | 0005 | After-SES idempotency for `lastAlertedAt` writeback | 7 (planned) |
 | 0006 | Lambda env vars (not Secrets Manager) for external API keys | 9 (planned) |

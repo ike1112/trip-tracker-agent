@@ -139,6 +139,21 @@ def test_anomaly_false_when_total_above_median_and_above_min():
     assert gates.is_anomaly(_snap(Decimal("1500")), _hist(1000, 1100, 1200)) is False
 
 
+# ---------------------------------------------------------------------------
+# Constant-value pinning — boundary tests above use absolute values, so a
+# silent edit to the discount constants wouldn't fail any of them. These
+# tests fail loudly if a constant drifts from the value the design spec
+# §5 prescribed.
+# ---------------------------------------------------------------------------
+
+def test_dedup_discount_constant_pins_to_five_percent():
+    assert gates.DEDUP_DISCOUNT == 0.95
+
+
+def test_anomaly_median_discount_constant_pins_to_fifteen_percent():
+    assert gates.ANOMALY_MEDIAN_DISCOUNT == 0.85
+
+
 def test_anomaly_handles_history_rows_without_total_price():
     """Defensive: a row that lost the totalPrice field shouldn't crash."""
     history = [{"totalPrice": Decimal("1000")}, {"someOtherField": "x"}]

@@ -76,7 +76,11 @@ def _to_decimal(value: Any) -> Decimal:
 
 
 def _check_currency(item: dict, label: str) -> None:
-    currency = item.get("currency", USD)
+    """Reject any item whose currency is not USD — including a MISSING
+    currency field. Treating absent-as-USD would silently corrupt the
+    FareHistory time series the moment a provider changed its response
+    shape (security audit MED-2 / threat model boundary [3b])."""
+    currency = item.get("currency")
     if currency != USD:
         raise ValueError(
             f"unsupported_currency: {label} returned {currency!r}, expected {USD}"
@@ -137,9 +141,10 @@ def _validate_deep_link(raw: Any) -> str:
         return ""
     if not isinstance(raw, str):
         raise ValueError(f"unsupported_deep_link_type: {type(raw).__name__}")
-    if len(raw.encode("utf-8")) > MAX_DEEP_LINK_BYTES:
+    encoded_len = len(raw.encode("utf-8"))
+    if encoded_len > MAX_DEEP_LINK_BYTES:
         raise ValueError(
-            f"deep_link_too_large: {len(raw)} chars > {MAX_DEEP_LINK_BYTES}"
+            f"deep_link_too_large: {encoded_len} bytes > {MAX_DEEP_LINK_BYTES}"
         )
     if not raw.startswith(ALLOWED_DEEP_LINK_SCHEME):
         raise ValueError(f"deep_link_scheme_not_https: {raw[:32]}")

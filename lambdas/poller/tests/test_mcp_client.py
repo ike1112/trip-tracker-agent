@@ -23,7 +23,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
+import mcp_client
 from mcp_client import (
+    MAX_RESPONSE_BYTES,
+    MCP_TIMEOUT_SECONDS,
     McpCallError,
     call_flights,
     call_hotels,
@@ -299,6 +302,21 @@ def test_timeout_raises_mcp_call_error(monkeypatch):
         call_flights("http://example.invalid/mcp", "j",
                      origin="SFO", destination="NRT",
                      depart_date="2026-10-15", return_date="2026-10-20", pax=1)
+
+
+# ---------------------------------------------------------------------------
+# Constant-value pinning.
+# ---------------------------------------------------------------------------
+
+def test_mcp_timeout_seconds_constant_pins_to_15():
+    """Threat model boundary [3b] cites this 15s value as the LiteAPI
+    latency-budget defence; changes to it should be deliberate."""
+    assert MCP_TIMEOUT_SECONDS == 15
+
+
+def test_max_response_bytes_constant_pins_to_2MB():
+    """Security audit MED-1 cap. A larger value reopens the OOM-DoS path."""
+    assert MAX_RESPONSE_BYTES == 2 * 1024 * 1024
 
 
 def test_connection_refused_raises_mcp_call_error():

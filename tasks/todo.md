@@ -89,20 +89,20 @@ Companion to [`plan.md`](./plan.md). One checklist per task; tick as you go.
 
 ## Task 5 — EventBridge enable + ADR 0003 + threat model + e2e
 
-- [ ] `lib/poller-server.js` — enable EventBridge rule, `pollIntervalMinutes` context default 240, Lambda concurrency reservation = 1
-- [ ] `docs/adr/0003-sequential-poll-loop.md` — Context/Decision/Consequences peer to ADR 0001/0002
-- [ ] `docs/adr/README.md` — flip 0003 status to Accepted + slice 5
-- [ ] `docs/threat-model.md` — append `[5] Poller → AWS services + MCPs` section
-- [ ] `tests/test_e2e_poll.py` — full slice exercised through one handler invocation; assert FareHistory rows + four metrics + structured logs
-- [ ] `pytest` green
-- [ ] `npx cdk synth --quiet` green; rule + Lambda target + permission visible
+- [x] `lib/poller-server.js` — EventBridge rule `enabled: true`; `pollIntervalMinutes` context default 240 (clamped [15,1440]); `lambdaTimeoutSeconds` clamped [30,300]; Lambda concurrency reservation = 1
+- [x] `docs/adr/0003-sequential-poll-loop.md` — Context/Decision/Consequences peer to ADR 0001/0002
+- [x] `docs/adr/README.md` — 0003 row flipped to Accepted + slice 5
+- [x] `docs/threat-model.md` — `[5] Poller → AWS services + MCPs` section appended; change-log updated; shared-sub framing made explicit per security-auditor
+- [x] `tests/test_e2e_poll.py` — full slice exercised through one handler invocation; asserts FareHistory rows, all four metrics with exact counts, per-watch decision logs, structured-log fields, dedup-blocked + anomaly + threshold + no-gate paths
+- [x] `pytest` green (129/129)
+- [~] `npx cdk synth --quiet` blocked by pre-existing Docker bundling for the agent's deps layer (unrelated to T5); construct loads + stack constructs cleanly via direct node test
 
 ### → Checkpoint B (Slice 5 complete)
-- [ ] **Multi-model final gate (parallel — single message, three Agent calls):**
-  - [ ] `agent-skills:code-reviewer` (Sonnet) — full slice five-axis review
-  - [ ] `agent-skills:security-auditor` (Sonnet) — MCP boundary + secret handling + threat-model section
-  - [ ] `agent-skills:test-engineer` (Sonnet) — verify no placeholder tests, gate boundaries covered, e2e proves alert path
-- [ ] Address findings
+- [x] **Multi-model final gate** — sequential after parallel attempt failed at network/watchdog layer:
+  - [x] `agent-skills:code-reviewer` (Sonnet) — APPROVE; addressed `bedrock_decisions_made` semantic mismatch (now uses `decision["bedrock_called"]` flag), ADR typo, deep-link byte/char message
+  - [x] `agent-skills:security-auditor` (Sonnet) — fix-then-ship; addressed CDK context value clamps, missing-currency strict failure, threat-model framing
+  - [x] `agent-skills:test-engineer` (Sonnet) — solid; added 5 constant-pinning tests (`DEDUP_DISCOUNT`, `ANOMALY_MEDIAN_DISCOUNT`, `TTL_DAYS`, `MAX_DEEP_LINK_BYTES`, `MAX_RESPONSE_BYTES`, `MCP_TIMEOUT_SECONDS`, `ANOMALY_WINDOW_DAYS`)
+- [x] Address findings (all in-scope; HIGH carryover for shared JWT secret + MED-3 carryover for agent JWT iat/exp remain deferred to ADR 0006 in slice 9)
 - [ ] Human approval
 - [ ] Commit
 - [ ] Tick slice 5 row in production-readiness companion §5 launch checklist

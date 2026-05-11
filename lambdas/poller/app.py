@@ -164,7 +164,13 @@ def _poll_one(watch: dict) -> None:
     )
 
     decision = decide(snapshot, watch, history)
-    metrics.increment(metrics.BEDROCK_DECISIONS_MADE)
+    # `bedrock_decisions_made` reflects actual model invocations — only
+    # increment when the gate cascade would have called Bedrock (i.e.,
+    # passed the dedup gate AND at least one of threshold/anomaly).
+    # Slice 6's real Bedrock call sits behind the same flag, so the
+    # metric semantics stay accurate when the stub is replaced.
+    if decision.get("bedrock_called"):
+        metrics.increment(metrics.BEDROCK_DECISIONS_MADE)
     logger.info(
         "decision_made",
         extra={

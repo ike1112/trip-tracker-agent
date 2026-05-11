@@ -28,19 +28,26 @@ from gates import is_anomaly, is_dedup_eligible, passes_threshold
 def decide(snapshot: dict, watch: dict, history: list[dict]) -> dict:
     """Decide whether `snapshot` for `watch` is alert-worthy.
 
-    Returns `{"alert": bool, "reason": str}` — `reason` is always present
-    and non-empty so the Notifier has something to say.
+    Returns `{"alert": bool, "reason": str, "bedrock_called": bool}`:
+      - `alert`/`reason` is always present and non-empty so the Notifier
+        has something to say.
+      - `bedrock_called` is True iff the dedup + (threshold OR anomaly)
+        gates would have triggered a Bedrock call. In slice 5 the model
+        is stubbed so no real call happens; this flag lets the handler
+        emit `bedrock_decisions_made` honestly (only when the model
+        would actually be invoked) without forcing the metric placement
+        to drift between slice 5 stub and slice 6 real implementation.
     """
     if not is_dedup_eligible(snapshot, watch):
-        return {"alert": False, "reason": "dedup_blocked"}
+        return {"alert": False, "reason": "dedup_blocked", "bedrock_called": False}
 
     threshold_pass = passes_threshold(snapshot, watch)
     anomaly_pass = is_anomaly(snapshot, history)
 
     if not (threshold_pass or anomaly_pass):
-        return {"alert": False, "reason": "no_gate_passed"}
+        return {"alert": False, "reason": "no_gate_passed", "bedrock_called": False}
 
     # Slice 6 replaces this body with a Bedrock call returning a real
     # reason string. Until then, the routing above is the actual logic
     # under test; the stub below is a placeholder for the model's answer.
-    return {"alert": True, "reason": "stub"}
+    return {"alert": True, "reason": "stub", "bedrock_called": True}
