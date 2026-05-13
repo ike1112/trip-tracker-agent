@@ -1,0 +1,50 @@
+{
+  "case_id": "0003-alert-under-budget-fresh",
+  "notes": "Snapshot is 25% under budget. No prior alert on this watch (no dedup conflict). Fare history is short but consistent. Threshold gate alone justifies alerting.",
+  "snapshot": {
+    "watchId": "w-003",
+    "timestamp": "2026-10-15T15:30:00+00:00",
+    "totalPrice": "1125.00",
+    "flightPrice": "825.00",
+    "hotelPrice": "300.00",
+    "bestOfferBlob": {
+      "airline": "JL",
+      "flightNumber": "1",
+      "stops": 0,
+      "departDate": "2026-10-15T12:00:00",
+      "returnDate": "2026-10-20T16:30:00",
+      "hotelName": "Ginza Capsule",
+      "checkin": "2026-10-15",
+      "checkout": "2026-10-20",
+      "bookingDeepLink": "https://example.test/hotels/h-3"
+    }
+  },
+  "watch": {
+    "userId": "u-fresh",
+    "watchId": "w-003",
+    "type": "specific",
+    "origin": "SFO",
+    "destination": "Tokyo",
+    "dateWindow": {
+      "earliestDepart": "2026-10-15",
+      "latestDepart": "2026-10-15",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-05-01T00:00:00+00:00",
+    "updatedAt": "2026-05-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1180.00"},
+    {"totalPrice": "1175.00"},
+    {"totalPrice": "1190.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "first match", "good price"]
+}

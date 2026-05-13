@@ -1,0 +1,53 @@
+{
+  "case_id": "0002-alert-clear-anomaly",
+  "notes": "Snapshot total drops 40% below the 30-day median in a single tick. Well under budget. Strong anomaly signal — exactly the kind of move the user set up the watch to catch.",
+  "snapshot": {
+    "watchId": "w-002",
+    "timestamp": "2026-10-15T08:00:00+00:00",
+    "totalPrice": "900.00",
+    "flightPrice": "650.00",
+    "hotelPrice": "250.00",
+    "bestOfferBlob": {
+      "airline": "NH",
+      "flightNumber": "112",
+      "stops": 0,
+      "departDate": "2026-10-15T11:10:00",
+      "returnDate": "2026-10-20T19:30:00",
+      "hotelName": "Shibuya Business Hotel",
+      "checkin": "2026-10-15",
+      "checkout": "2026-10-20",
+      "bookingDeepLink": "https://example.test/hotels/h-2"
+    }
+  },
+  "watch": {
+    "userId": "u-anomaly",
+    "watchId": "w-002",
+    "type": "specific",
+    "origin": "SFO",
+    "destination": "Tokyo",
+    "dateWindow": {
+      "earliestDepart": "2026-10-15",
+      "latestDepart": "2026-10-15",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1800.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-05-01T00:00:00+00:00",
+    "updatedAt": "2026-05-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1500.00"},
+    {"totalPrice": "1490.00"},
+    {"totalPrice": "1510.00"},
+    {"totalPrice": "1495.00"},
+    {"totalPrice": "1505.00"},
+    {"totalPrice": "1500.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["anomaly", "below median", "rare drop"]
+}

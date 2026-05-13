@@ -1,0 +1,52 @@
+{
+  "case_id": "0001-no-alert-stable-fare",
+  "notes": "Fare has been flat (within +/-0.5%) for 30 days. Snapshot total is 10% over the user's budget. No anomaly signal and no headroom; alerting would just spam the user.",
+  "snapshot": {
+    "watchId": "w-001",
+    "timestamp": "2026-10-15T12:00:00+00:00",
+    "totalPrice": "1650.00",
+    "flightPrice": "1200.00",
+    "hotelPrice": "450.00",
+    "bestOfferBlob": {
+      "airline": "UA",
+      "flightNumber": "874",
+      "stops": 1,
+      "departDate": "2026-10-15T10:35:00",
+      "returnDate": "2026-10-20T17:55:00",
+      "hotelName": "Park Central",
+      "checkin": "2026-10-15",
+      "checkout": "2026-10-20",
+      "bookingDeepLink": "https://example.test/hotels/h-1"
+    }
+  },
+  "watch": {
+    "userId": "u-stable",
+    "watchId": "w-001",
+    "type": "specific",
+    "origin": "SFO",
+    "destination": "Tokyo",
+    "dateWindow": {
+      "earliestDepart": "2026-10-15",
+      "latestDepart": "2026-10-15",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-05-01T00:00:00+00:00",
+    "updatedAt": "2026-05-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1648.00"},
+    {"totalPrice": "1652.00"},
+    {"totalPrice": "1649.50"},
+    {"totalPrice": "1651.00"},
+    {"totalPrice": "1650.25"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["over budget", "no anomaly", "fare stable"]
+}

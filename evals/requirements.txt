@@ -1,0 +1,2 @@
+# Install:  pip install -r evals/requirements.txt -r lambdas/poller/dev-requirements.txt
+anthropic==0.39.0
