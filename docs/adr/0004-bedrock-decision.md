@@ -65,10 +65,10 @@ volume ≈ $5/mo.
   group E) catches any refactor that violates this.
 - **IAM grant resource-scoped** to the foundation-model ARN in
   `lib/poller-server.js`. Not `bedrock:*`, not `Resource: '*'`.
-- **Evals as repo artefacts.** The `evals/` package (T3) ships a
-  loader, Sonnet 4.6 judge client, runner, and a 30+ case
-  hand-labelled corpus (T4). Runner is local-only; CI workflow_dispatch
-  is slice-9 work.
+- **Evals as repo artefacts.** The `evals/` package ships a loader,
+  Sonnet 4.6 judge client, runner, and a 30+ case hand-labelled
+  corpus. Runner is local-only; wiring it to a CI `workflow_dispatch`
+  trigger is deferred until a per-PR cost discipline is in place.
 
 ## Consequences
 
@@ -80,8 +80,7 @@ volume ≈ $5/mo.
 - **Cost is bounded and observable.** Haiku 4.5 + dedup-gate-first +
   reserved-concurrency-1 + clamped poll cadence (ADR 0003) cap the
   rate at which `bedrock:InvokeModel` can fire. AWS Budget alarm at
-  $10/mo is slice-9 work but the per-call ceiling is already in
-  place.
+  $10/mo is deferred — the per-call ceiling is already in place.
 - **Tests stay cost-free.** Stub mode is the conftest default. The
   174-test poller suite plus the 106-test eval suite runs without
   touching Bedrock.
@@ -100,7 +99,7 @@ volume ≈ $5/mo.
 - **Eval discipline is a maintenance burden.** Any prompt edit in
   `bedrock_decide.py` or model-ID bump should be preceded by a local
   eval run. The README documents the loop; CI enforcement is
-  slice-9.
+  deferred.
 - **Model judgement is not unit-testable.** Tests pin the parser,
   prompt-builder determinism, injection posture, and fallback paths,
   but the model's actual *call* on a snapshot is only verified at

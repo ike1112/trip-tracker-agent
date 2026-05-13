@@ -335,6 +335,65 @@ def test_F_alert_int_one_does_not_pass_as_true():
     assert result["reason"] == "model_response_invalid"
 
 
+@pytest.mark.parametrize("char", ["<", ">"])
+def test_F8_reason_with_html_chars_returns_fallback(char):
+    """`reason` flows into the Notifier's alert email body verbatim. A
+    parser that accepted `<script>` or `</p>` would push the escape
+    burden onto every consumer; reject at the source instead. Both `<`
+    and `>` are checked independently so a special-case loosening of
+    either direction trips a test."""
+    bd = _import_bedrock("live")
+    payload = json.dumps({"alert": True, "reason": f"Great deal {char}offer"})
+    result = _decide_with_model_text(bd, payload)
+    assert result == {"alert": False, "reason": "model_response_invalid", "bedrock_called": True}
+
+
+@pytest.mark.parametrize("codepoint", [0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                                         0x2066, 0x2067, 0x2068, 0x2069])
+def test_F9_reason_with_bidi_formatting_codepoint_returns_fallback(codepoint):
+    """Every codepoint in the Unicode bidi-formatting block (U+202A-E
+    LRE/RLE/PDF/LRO/RLO + U+2066-9 LRI/RLI/FSI/PDI) is a visual-
+    spoofing primitive in the rendered alert email. A regression that
+    special-cases-removes any one of them must fail a test."""
+    bd = _import_bedrock("live")
+    reason_with_bidi = "ok" + chr(codepoint) + "rest"
+    body = json.dumps({"alert": True, "reason": reason_with_bidi})
+    result = _decide_with_model_text(bd, body)
+    assert result == {"alert": False, "reason": "model_response_invalid", "bedrock_called": True}
+
+
+def test_F9b_reason_with_null_byte_returns_fallback():
+    """Null byte crashes downstream UTF-8 sinks. Reject at parse.
+    Construct via chr() so the source file never contains the byte."""
+    bd = _import_bedrock("live")
+    reason_with_null = "ok" + chr(0) + "rest"
+    body = json.dumps({"alert": True, "reason": reason_with_null})
+    result = _decide_with_model_text(bd, body)
+    assert result == {"alert": False, "reason": "model_response_invalid", "bedrock_called": True}
+
+
+def test_F10_reason_with_lone_surrogate_returns_fallback():
+    """`json.loads` accepts lone surrogates as Python str; `.encode("utf-8")`
+    later crashes the log pipeline. Reject at parse."""
+    bd = _import_bedrock("live")
+    # Manually craft the JSON literal — `json.dumps` ensure_ascii=True
+    # encodes the surrogate as `\ud800` which is exactly what we want.
+    payload = '{"alert": true, "reason": "ok\\ud800rest"}'
+    result = _decide_with_model_text(bd, payload)
+    assert result == {"alert": False, "reason": "model_response_invalid", "bedrock_called": True}
+
+
+def test_F11_reason_with_newline_and_tab_is_accepted():
+    """Newlines and tabs are allowed — they're legitimate formatting in
+    a 200-char user-facing string; control chars OUTSIDE that pair are
+    what we reject."""
+    bd = _import_bedrock("live")
+    body = json.dumps({"alert": True, "reason": "Line one\nLine two\twith tab"})
+    result = _decide_with_model_text(bd, body)
+    assert result["alert"] is True
+    assert "\n" in result["reason"]
+
+
 # ===========================================================================
 # Group G — Reason length cap
 # ===========================================================================

@@ -99,8 +99,13 @@ SYSTEM_PROMPT = (
 )
 
 
-def _f(value: Any) -> float:
-    """Decimal/int/float → float for serialisation in the prompt."""
+def _to_float(value: Any) -> float:
+    """Coerce Decimal/int/float to a plain float for prompt serialisation.
+
+    The prompt builder f-strings need an arithmetic type that survives
+    `:.2f` formatting; Decimal survives but mixing Decimal and float in
+    `min()` / `statistics.median()` can crash, so we normalise here.
+    """
     if value is None:
         return 0.0
     return float(value)
@@ -115,7 +120,7 @@ def _build_prompt(snapshot: dict, watch: dict, history: list[dict]) -> dict:
     user role as data, never in the system role as instructions.
     """
     blob = snapshot.get("bestOfferBlob") or {}
-    history_totals = [_f(h.get("totalPrice")) for h in history if "totalPrice" in h]
+    history_totals = [_to_float(h.get("totalPrice")) for h in history if "totalPrice" in h]
     median_str = (
         f"{statistics.median(history_totals):.2f}" if history_totals else "n/a"
     )
@@ -127,8 +132,8 @@ def _build_prompt(snapshot: dict, watch: dict, history: list[dict]) -> dict:
     prefs_str = json.dumps(prefs, sort_keys=True) if prefs else "{}"
 
     user_message = (
-        f"Current total price (USD): {_f(snapshot.get('totalPrice')):.2f}\n"
-        f"User's max budget (USD): {_f(watch.get('maxTotalPrice')):.2f}\n"
+        f"Current total price (USD): {_to_float(snapshot.get('totalPrice')):.2f}\n"
+        f"User's max budget (USD): {_to_float(watch.get('maxTotalPrice')):.2f}\n"
         f"30-day median total: {median_str}\n"
         f"30-day min total: {min_str}\n"
         f"Sample size: {len(history_totals)}\n"
@@ -186,6 +191,33 @@ def _parse_response(raw: str) -> dict | None:
     if not isinstance(reason, str) or not reason:
         return None
     if len(reason) > MAX_REASON_CHARS:
+        return None
+    # The reason string is templated verbatim into the alert email body
+    # by the Notifier. A model that emits `<script>...` or stray markup
+    # could inject HTML if the email template ever loses an escape pass;
+    # rejecting at the parser is a load-bearing primitive that doesn't
+    # rely on every future consumer remembering to escape.
+    if "<" in reason or ">" in reason:
+        return None
+    # Reject C0 control chars (except newline + tab) — null bytes and
+    # similar codepoints crash downstream UTF-8 sinks. Reject the bidi-
+    # formatting block (U+202A-U+202E + U+2066-U+2069) separately — those
+    # are not < 0x20 but ARE visual-spoofing primitives for the rendered
+    # alert email.
+    for c in reason:
+        cp = ord(c)
+        if cp < 0x20 and c not in "\n\t":
+            return None
+        if 0x202A <= cp <= 0x202E:
+            return None
+        if 0x2066 <= cp <= 0x2069:
+            return None
+    # Lone surrogates parse as JSON strings but fail `.encode("utf-8")`;
+    # one downstream `record.encode("utf-8")` later would crash the log
+    # pipeline. Reject at the source.
+    try:
+        reason.encode("utf-8")
+    except UnicodeEncodeError:
         return None
     return {"alert": alert, "reason": reason}
 
