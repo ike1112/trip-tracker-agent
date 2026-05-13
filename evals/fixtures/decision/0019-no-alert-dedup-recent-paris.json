@@ -1,0 +1,53 @@
+{
+  "case_id": "0019-no-alert-dedup-recent-paris",
+  "notes": "User got an alert two days ago at $1505. Today's snapshot is $1498 — within 5% so dedup blocks. Without dedup the threshold gate would have fired again, but spamming the same number serves no one.",
+  "snapshot": {
+    "watchId": "w-019",
+    "timestamp": "2026-10-26T09:10:00+00:00",
+    "totalPrice": "1498.00",
+    "flightPrice": "1080.00",
+    "hotelPrice": "418.00",
+    "bestOfferBlob": {
+      "airline": "AF",
+      "flightNumber": "23",
+      "stops": 0,
+      "departDate": "2026-10-26T19:20:00",
+      "returnDate": "2026-11-01T12:50:00",
+      "hotelName": "Latin Quarter Inn",
+      "checkin": "2026-10-26",
+      "checkout": "2026-11-01",
+      "bookingDeepLink": "https://example.test/hotels/latin-quarter"
+    }
+  },
+  "watch": {
+    "userId": "u-paris-dedup",
+    "watchId": "w-019",
+    "type": "specific",
+    "origin": "ATL",
+    "destination": "Paris",
+    "dateWindow": {
+      "earliestDepart": "2026-10-26",
+      "latestDepart": "2026-10-26",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "2000.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": "2026-10-24T08:00:00+00:00",
+    "lastAlertedPrice": "1505.00",
+    "createdAt": "2026-07-04T00:00:00+00:00",
+    "updatedAt": "2026-10-24T08:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1495.00"},
+    {"totalPrice": "1505.00"},
+    {"totalPrice": "1510.00"},
+    {"totalPrice": "1500.00"},
+    {"totalPrice": "1502.00"},
+    {"totalPrice": "1498.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["dedup", "recent alert", "no real change"]
+}

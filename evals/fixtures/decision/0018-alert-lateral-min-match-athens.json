@@ -1,0 +1,56 @@
+{
+  "case_id": "0018-alert-lateral-min-match-athens",
+  "notes": "Snapshot $1240 equals a low seen six rows back. Not a fresh anomaly, but the price is 73% of the $1700 budget and the watch has never alerted — threshold gate justifies surfacing the offer to the user.",
+  "snapshot": {
+    "watchId": "w-018",
+    "timestamp": "2026-09-19T12:35:00+00:00",
+    "totalPrice": "1240.00",
+    "flightPrice": "910.00",
+    "hotelPrice": "330.00",
+    "bestOfferBlob": {
+      "airline": "A3",
+      "flightNumber": "601",
+      "stops": 0,
+      "departDate": "2026-09-19T17:10:00",
+      "returnDate": "2026-09-25T20:40:00",
+      "hotelName": "Plaka Sunset Stay",
+      "checkin": "2026-09-19",
+      "checkout": "2026-09-25",
+      "bookingDeepLink": "https://example.test/hotels/plaka-sunset"
+    }
+  },
+  "watch": {
+    "userId": "u-athens",
+    "watchId": "w-018",
+    "type": "specific",
+    "origin": "JFK",
+    "destination": "Athens",
+    "dateWindow": {
+      "earliestDepart": "2026-09-19",
+      "latestDepart": "2026-09-19",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "1700.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-06-18T00:00:00+00:00",
+    "updatedAt": "2026-06-18T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1380.00"},
+    {"totalPrice": "1240.00"},
+    {"totalPrice": "1410.00"},
+    {"totalPrice": "1355.00"},
+    {"totalPrice": "1290.00"},
+    {"totalPrice": "1320.00"},
+    {"totalPrice": "1265.00"},
+    {"totalPrice": "1340.00"},
+    {"totalPrice": "1305.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "lateral floor", "first match"]
+}

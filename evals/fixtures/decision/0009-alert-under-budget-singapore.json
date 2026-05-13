@@ -1,0 +1,54 @@
+{
+  "case_id": "0009-alert-under-budget-singapore",
+  "notes": "Snapshot $2240 is 75% of the $3000 budget. Fare history is gently descending but no anomaly — the win is the absolute price-vs-budget gap on a watch that has never alerted. Threshold gate fires cleanly.",
+  "snapshot": {
+    "watchId": "w-009",
+    "timestamp": "2026-11-15T09:55:00+00:00",
+    "totalPrice": "2240.00",
+    "flightPrice": "1740.00",
+    "hotelPrice": "500.00",
+    "bestOfferBlob": {
+      "airline": "SQ",
+      "flightNumber": "23",
+      "stops": 0,
+      "departDate": "2026-11-15T21:30:00",
+      "returnDate": "2026-11-22T07:15:00",
+      "hotelName": "Marina Bayside Suites",
+      "checkin": "2026-11-15",
+      "checkout": "2026-11-22",
+      "bookingDeepLink": "https://booking-example.test/marina-bayside"
+    }
+  },
+  "watch": {
+    "userId": "u-singapore",
+    "watchId": "w-009",
+    "type": "specific",
+    "origin": "LAX",
+    "destination": "Singapore",
+    "dateWindow": {
+      "earliestDepart": "2026-11-15",
+      "latestDepart": "2026-11-15",
+      "nights": 7
+    },
+    "pax": 2,
+    "maxTotalPrice": "3000.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 5},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-08-12T00:00:00+00:00",
+    "updatedAt": "2026-08-12T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "2310.00"},
+    {"totalPrice": "2295.00"},
+    {"totalPrice": "2280.00"},
+    {"totalPrice": "2270.00"},
+    {"totalPrice": "2260.00"},
+    {"totalPrice": "2255.00"},
+    {"totalPrice": "2250.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "first match", "fresh watch"]
+}

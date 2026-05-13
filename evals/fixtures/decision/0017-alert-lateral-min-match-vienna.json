@@ -1,0 +1,55 @@
+{
+  "case_id": "0017-alert-lateral-min-match-vienna",
+  "notes": "Snapshot $1180 matches the previous floor of $1180 seen earlier in the history. Lateral move rather than fresh drop, but the price is still well under the $1500 budget on a never-alerted watch, so the threshold gate carries the decision.",
+  "snapshot": {
+    "watchId": "w-017",
+    "timestamp": "2026-12-14T17:40:00+00:00",
+    "totalPrice": "1180.00",
+    "flightPrice": "880.00",
+    "hotelPrice": "300.00",
+    "bestOfferBlob": {
+      "airline": "LH",
+      "flightNumber": "1228",
+      "stops": 1,
+      "departDate": "2026-12-14T19:55:00",
+      "returnDate": "2026-12-19T10:15:00",
+      "hotelName": "Schonbrunn View Hotel",
+      "checkin": "2026-12-14",
+      "checkout": "2026-12-19",
+      "bookingDeepLink": "https://example.test/hotels/schonbrunn-view"
+    }
+  },
+  "watch": {
+    "userId": "u-vienna",
+    "watchId": "w-017",
+    "type": "specific",
+    "origin": "ORD",
+    "destination": "Vienna",
+    "dateWindow": {
+      "earliestDepart": "2026-12-14",
+      "latestDepart": "2026-12-14",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-09-01T00:00:00+00:00",
+    "updatedAt": "2026-09-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1320.00"},
+    {"totalPrice": "1295.00"},
+    {"totalPrice": "1180.00"},
+    {"totalPrice": "1250.00"},
+    {"totalPrice": "1310.00"},
+    {"totalPrice": "1265.00"},
+    {"totalPrice": "1240.00"},
+    {"totalPrice": "1285.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "matches previous floor", "first match"]
+}

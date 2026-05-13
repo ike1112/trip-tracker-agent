@@ -1,0 +1,51 @@
+{
+  "case_id": "0011-alert-under-budget-osaka",
+  "notes": "Snapshot $1320 sits at 66% of the $2000 budget. History is short (4 rows) but consistent with no prior trip. Watch has never alerted; threshold gate fires on the absolute price-vs-budget signal.",
+  "snapshot": {
+    "watchId": "w-011",
+    "timestamp": "2026-08-18T11:05:00+00:00",
+    "totalPrice": "1320.00",
+    "flightPrice": "970.00",
+    "hotelPrice": "350.00",
+    "bestOfferBlob": {
+      "airline": "NH",
+      "flightNumber": "112",
+      "stops": 0,
+      "departDate": "2026-08-18T13:45:00",
+      "returnDate": "2026-08-24T19:50:00",
+      "hotelName": "Namba Riverside Hotel",
+      "checkin": "2026-08-18",
+      "checkout": "2026-08-24",
+      "bookingDeepLink": "https://example.test/hotels/namba-riverside"
+    }
+  },
+  "watch": {
+    "userId": "u-osaka",
+    "watchId": "w-011",
+    "type": "specific",
+    "origin": "SEA",
+    "destination": "Osaka",
+    "dateWindow": {
+      "earliestDepart": "2026-08-18",
+      "latestDepart": "2026-08-18",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "2000.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-06-04T00:00:00+00:00",
+    "updatedAt": "2026-06-04T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1335.00"},
+    {"totalPrice": "1340.00"},
+    {"totalPrice": "1325.00"},
+    {"totalPrice": "1330.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "first match", "good price"]
+}

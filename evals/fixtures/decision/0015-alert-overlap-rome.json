@@ -1,0 +1,56 @@
+{
+  "case_id": "0015-alert-overlap-rome",
+  "notes": "Snapshot $980 is 57% of $1720 median and 56% of the $1750 budget. Both signals are decisively in alert territory; the user gets a single firm 'this is a real win' notification.",
+  "snapshot": {
+    "watchId": "w-015",
+    "timestamp": "2026-10-12T06:15:00+00:00",
+    "totalPrice": "980.00",
+    "flightPrice": "720.00",
+    "hotelPrice": "260.00",
+    "bestOfferBlob": {
+      "airline": "AZ",
+      "flightNumber": "611",
+      "stops": 0,
+      "departDate": "2026-10-12T16:55:00",
+      "returnDate": "2026-10-17T11:30:00",
+      "hotelName": "Trastevere Townhouse",
+      "checkin": "2026-10-12",
+      "checkout": "2026-10-17",
+      "bookingDeepLink": "https://example.test/hotels/trastevere"
+    }
+  },
+  "watch": {
+    "userId": "u-rome",
+    "watchId": "w-015",
+    "type": "specific",
+    "origin": "EWR",
+    "destination": "Rome",
+    "dateWindow": {
+      "earliestDepart": "2026-10-12",
+      "latestDepart": "2026-10-12",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1750.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-07-30T00:00:00+00:00",
+    "updatedAt": "2026-07-30T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1720.00"},
+    {"totalPrice": "1735.00"},
+    {"totalPrice": "1710.00"},
+    {"totalPrice": "1725.00"},
+    {"totalPrice": "1718.00"},
+    {"totalPrice": "1730.00"},
+    {"totalPrice": "1715.00"},
+    {"totalPrice": "1722.00"},
+    {"totalPrice": "1728.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["anomaly", "under budget", "rare drop"]
+}

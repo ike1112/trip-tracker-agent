@@ -1,0 +1,56 @@
+{
+  "case_id": "0024-no-alert-over-budget-hawaii",
+  "notes": "Snapshot $3150 exceeds the $2700 budget by 17%. History is flat at that elevated level — fare is not in range for this user's ceiling. No gate justifies an alert.",
+  "snapshot": {
+    "watchId": "w-024",
+    "timestamp": "2026-12-20T13:15:00+00:00",
+    "totalPrice": "3150.00",
+    "flightPrice": "2200.00",
+    "hotelPrice": "950.00",
+    "bestOfferBlob": {
+      "airline": "HA",
+      "flightNumber": "9",
+      "stops": 0,
+      "departDate": "2026-12-20T08:45:00",
+      "returnDate": "2026-12-27T22:30:00",
+      "hotelName": "Waikiki Reef Tower",
+      "checkin": "2026-12-20",
+      "checkout": "2026-12-27",
+      "bookingDeepLink": "https://example.test/hotels/waikiki-reef"
+    }
+  },
+  "watch": {
+    "userId": "u-hawaii-holiday",
+    "watchId": "w-024",
+    "type": "specific",
+    "origin": "EWR",
+    "destination": "Honolulu",
+    "dateWindow": {
+      "earliestDepart": "2026-12-20",
+      "latestDepart": "2026-12-20",
+      "nights": 7
+    },
+    "pax": 2,
+    "maxTotalPrice": "2700.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-09-12T00:00:00+00:00",
+    "updatedAt": "2026-09-12T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "3140.00"},
+    {"totalPrice": "3160.00"},
+    {"totalPrice": "3155.00"},
+    {"totalPrice": "3145.00"},
+    {"totalPrice": "3170.00"},
+    {"totalPrice": "3148.00"},
+    {"totalPrice": "3152.00"},
+    {"totalPrice": "3158.00"},
+    {"totalPrice": "3142.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["over budget", "no anomaly", "holiday peak"]
+}

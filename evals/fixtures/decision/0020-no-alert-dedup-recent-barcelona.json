@@ -1,0 +1,53 @@
+{
+  "case_id": "0020-no-alert-dedup-recent-barcelona",
+  "notes": "Alert fired yesterday at $1320. Snapshot today is $1295 — a 1.9% move, well inside the dedup window. Sending again would be noise; user already has the offer in their inbox.",
+  "snapshot": {
+    "watchId": "w-020",
+    "timestamp": "2026-09-30T11:25:00+00:00",
+    "totalPrice": "1295.00",
+    "flightPrice": "945.00",
+    "hotelPrice": "350.00",
+    "bestOfferBlob": {
+      "airline": "IB",
+      "flightNumber": "2521",
+      "stops": 0,
+      "departDate": "2026-09-30T18:15:00",
+      "returnDate": "2026-10-05T09:35:00",
+      "hotelName": "Eixample Boutique",
+      "checkin": "2026-09-30",
+      "checkout": "2026-10-05",
+      "bookingDeepLink": "https://booking-example.test/eixample"
+    }
+  },
+  "watch": {
+    "userId": "u-barcelona",
+    "watchId": "w-020",
+    "type": "specific",
+    "origin": "MIA",
+    "destination": "Barcelona",
+    "dateWindow": {
+      "earliestDepart": "2026-09-30",
+      "latestDepart": "2026-09-30",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1700.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": "2026-09-29T10:00:00+00:00",
+    "lastAlertedPrice": "1320.00",
+    "createdAt": "2026-07-19T00:00:00+00:00",
+    "updatedAt": "2026-09-29T10:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1320.00"},
+    {"totalPrice": "1310.00"},
+    {"totalPrice": "1305.00"},
+    {"totalPrice": "1300.00"},
+    {"totalPrice": "1298.00"},
+    {"totalPrice": "1295.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["dedup", "recent alert", "no meaningful drop"]
+}

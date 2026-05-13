@@ -1,0 +1,55 @@
+{
+  "case_id": "0010-alert-under-budget-dubai",
+  "notes": "Snapshot $1450 is 72% of the $2000 budget. No anomaly relative to a flattish history, but the absolute headroom plus a never-alerted watch is exactly the threshold-gate scenario the user opted into.",
+  "snapshot": {
+    "watchId": "w-010",
+    "timestamp": "2026-10-30T16:45:00+00:00",
+    "totalPrice": "1450.00",
+    "flightPrice": "1050.00",
+    "hotelPrice": "400.00",
+    "bestOfferBlob": {
+      "airline": "EK",
+      "flightNumber": "201",
+      "stops": 0,
+      "departDate": "2026-10-30T22:20:00",
+      "returnDate": "2026-11-04T08:35:00",
+      "hotelName": "Jumeirah Beach Lodge",
+      "checkin": "2026-10-30",
+      "checkout": "2026-11-04",
+      "bookingDeepLink": "https://example.test/hotels/jumeirah-beach"
+    }
+  },
+  "watch": {
+    "userId": "u-dubai",
+    "watchId": "w-010",
+    "type": "specific",
+    "origin": "JFK",
+    "destination": "Dubai",
+    "dateWindow": {
+      "earliestDepart": "2026-10-30",
+      "latestDepart": "2026-10-30",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "2000.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-07-22T00:00:00+00:00",
+    "updatedAt": "2026-07-22T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1465.00"},
+    {"totalPrice": "1472.00"},
+    {"totalPrice": "1458.00"},
+    {"totalPrice": "1480.00"},
+    {"totalPrice": "1462.00"},
+    {"totalPrice": "1455.00"},
+    {"totalPrice": "1470.00"},
+    {"totalPrice": "1448.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "first match", "no recent alert"]
+}

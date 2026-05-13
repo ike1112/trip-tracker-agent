@@ -1,0 +1,55 @@
+{
+  "case_id": "0007-alert-anomaly-frankfurt-dip",
+  "notes": "History median $1290, snapshot $735 — a 43% drop in one tick. The dip is sudden and isolated (previous tick was $1280), which is the textbook anomaly pattern the decision pipeline should surface to the user.",
+  "snapshot": {
+    "watchId": "w-007",
+    "timestamp": "2026-12-04T05:30:00+00:00",
+    "totalPrice": "735.00",
+    "flightPrice": "525.00",
+    "hotelPrice": "210.00",
+    "bestOfferBlob": {
+      "airline": "LH",
+      "flightNumber": "441",
+      "stops": 0,
+      "departDate": "2026-12-04T20:15:00",
+      "returnDate": "2026-12-09T13:55:00",
+      "hotelName": "Westend Riverside",
+      "checkin": "2026-12-04",
+      "checkout": "2026-12-09",
+      "bookingDeepLink": "https://example.test/hotels/westend-riverside"
+    }
+  },
+  "watch": {
+    "userId": "u-frankfurt",
+    "watchId": "w-007",
+    "type": "specific",
+    "origin": "BOS",
+    "destination": "Frankfurt",
+    "dateWindow": {
+      "earliestDepart": "2026-12-04",
+      "latestDepart": "2026-12-04",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1400.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-08-01T00:00:00+00:00",
+    "updatedAt": "2026-08-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1295.00"},
+    {"totalPrice": "1280.00"},
+    {"totalPrice": "1305.00"},
+    {"totalPrice": "1290.00"},
+    {"totalPrice": "1275.00"},
+    {"totalPrice": "1310.00"},
+    {"totalPrice": "1285.00"},
+    {"totalPrice": "1298.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["anomaly", "sudden drop", "below median"]
+}

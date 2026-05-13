@@ -1,0 +1,56 @@
+{
+  "case_id": "0021-no-alert-dedup-recent-tokyo",
+  "notes": "Last alert went out three days ago at $1850. Snapshot today is $1820 — a 1.6% nudge. The threshold gate would re-fire, and there's even a hint of anomaly vs the longer median, but dedup correctly suppresses because the user already saw this number a few days ago.",
+  "snapshot": {
+    "watchId": "w-021",
+    "timestamp": "2026-11-02T15:45:00+00:00",
+    "totalPrice": "1820.00",
+    "flightPrice": "1380.00",
+    "hotelPrice": "440.00",
+    "bestOfferBlob": {
+      "airline": "JL",
+      "flightNumber": "5",
+      "stops": 0,
+      "departDate": "2026-11-02T11:20:00",
+      "returnDate": "2026-11-08T15:10:00",
+      "hotelName": "Shinjuku Lantern Hotel",
+      "checkin": "2026-11-02",
+      "checkout": "2026-11-08",
+      "bookingDeepLink": "https://example.test/hotels/shinjuku-lantern"
+    }
+  },
+  "watch": {
+    "userId": "u-tokyo-2",
+    "watchId": "w-021",
+    "type": "specific",
+    "origin": "SFO",
+    "destination": "Tokyo",
+    "dateWindow": {
+      "earliestDepart": "2026-11-02",
+      "latestDepart": "2026-11-02",
+      "nights": 6
+    },
+    "pax": 2,
+    "maxTotalPrice": "2500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": "2026-10-30T07:30:00+00:00",
+    "lastAlertedPrice": "1850.00",
+    "createdAt": "2026-06-28T00:00:00+00:00",
+    "updatedAt": "2026-10-30T07:30:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "2100.00"},
+    {"totalPrice": "2080.00"},
+    {"totalPrice": "2050.00"},
+    {"totalPrice": "1980.00"},
+    {"totalPrice": "1920.00"},
+    {"totalPrice": "1880.00"},
+    {"totalPrice": "1850.00"},
+    {"totalPrice": "1835.00"},
+    {"totalPrice": "1820.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["dedup", "recent alert", "similar price"]
+}

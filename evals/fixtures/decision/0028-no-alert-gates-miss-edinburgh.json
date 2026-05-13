@@ -1,0 +1,55 @@
+{
+  "case_id": "0028-no-alert-gates-miss-edinburgh",
+  "notes": "Snapshot at $1295 sits exactly between the budget ceiling ($1300) and the 30-day median ($1290). The fare is normal, the user has effectively zero headroom under their budget, and no prior alert has fired. Neither threshold nor anomaly gates pass meaningfully.",
+  "snapshot": {
+    "watchId": "w-028",
+    "timestamp": "2026-09-22T10:30:00+00:00",
+    "totalPrice": "1295.00",
+    "flightPrice": "880.00",
+    "hotelPrice": "415.00",
+    "bestOfferBlob": {
+      "airline": "BA",
+      "flightNumber": "1493",
+      "stops": 1,
+      "departDate": "2026-09-22T19:00:00",
+      "returnDate": "2026-09-27T08:35:00",
+      "hotelName": "Old Town Royal Mile Hotel",
+      "checkin": "2026-09-22",
+      "checkout": "2026-09-27",
+      "bookingDeepLink": "https://example.test/hotels/old-town-royal-mile"
+    }
+  },
+  "watch": {
+    "userId": "u-edinburgh",
+    "watchId": "w-028",
+    "type": "specific",
+    "origin": "JFK",
+    "destination": "Edinburgh",
+    "dateWindow": {
+      "earliestDepart": "2026-09-22",
+      "latestDepart": "2026-09-22",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1300.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 2, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-07-15T00:00:00+00:00",
+    "updatedAt": "2026-07-15T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1288.00"},
+    {"totalPrice": "1292.00"},
+    {"totalPrice": "1290.00"},
+    {"totalPrice": "1287.00"},
+    {"totalPrice": "1293.00"},
+    {"totalPrice": "1295.00"},
+    {"totalPrice": "1289.00"},
+    {"totalPrice": "1296.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["no anomaly", "at budget ceiling", "no real change"]
+}

@@ -1,0 +1,57 @@
+{
+  "case_id": "0013-alert-borderline-madrid",
+  "notes": "Snapshot $1530 is ~86% of median $1780 and ~90% of $1700 budget. Either signal alone reads as 'meh', but the combination of below-baseline and within-ceiling on a never-alerted watch is the kind of soft win the user wants surfaced.",
+  "snapshot": {
+    "watchId": "w-013",
+    "timestamp": "2026-10-04T08:50:00+00:00",
+    "totalPrice": "1530.00",
+    "flightPrice": "1100.00",
+    "hotelPrice": "430.00",
+    "bestOfferBlob": {
+      "airline": "IB",
+      "flightNumber": "6168",
+      "stops": 0,
+      "departDate": "2026-10-04T16:40:00",
+      "returnDate": "2026-10-10T12:30:00",
+      "hotelName": "Gran Via Heritage",
+      "checkin": "2026-10-04",
+      "checkout": "2026-10-10",
+      "bookingDeepLink": "https://booking-example.test/gran-via"
+    }
+  },
+  "watch": {
+    "userId": "u-madrid",
+    "watchId": "w-013",
+    "type": "specific",
+    "origin": "MIA",
+    "destination": "Madrid",
+    "dateWindow": {
+      "earliestDepart": "2026-10-04",
+      "latestDepart": "2026-10-04",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "1700.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-07-12T00:00:00+00:00",
+    "updatedAt": "2026-07-12T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1775.00"},
+    {"totalPrice": "1790.00"},
+    {"totalPrice": "1782.00"},
+    {"totalPrice": "1788.00"},
+    {"totalPrice": "1770.00"},
+    {"totalPrice": "1795.00"},
+    {"totalPrice": "1778.00"},
+    {"totalPrice": "1785.00"},
+    {"totalPrice": "1772.00"},
+    {"totalPrice": "1780.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["below median", "under budget", "combined signal"]
+}

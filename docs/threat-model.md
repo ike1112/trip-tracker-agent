@@ -166,13 +166,43 @@ look like the agent and vice versa; per-watch IAM scoping if multi-tenant
 work ever lands; a poller-specific X-Ray service map node so the cron
 trace is independently visible from the chat path.
 
+### [6] Poller → Bedrock InvokeModel
+
+The poller (slice 5 onward) calls `bedrock-runtime.invoke_model` once
+per watch when the gate cascade reaches the decision layer. The call
+goes out under the Lambda's IAM role over the AWS-internal control
+plane — same blast radius as boundary [4] but with provider-controlled
+strings (hotel names, airline codes from Duffel/LiteAPI responses)
+flowing inside the prompt body. ADR 0004 documents the model choice
+and the strict-JSON contract.
+
+| Threat | Mitigation |
+|---|---|
+| Prompt injection via `bestOfferBlob.hotelName` / `airline` (provider-controlled) | **System prompt contains only rubric text; provider strings interpolated into the user message only.** A sentinel-based test in `lambdas/poller/tests/test_bedrock_decide.py` group E asserts the system message never includes any provider string. The model treats the user message as data, not instructions; per ADR 0001 the closure-factory pattern caps the worst case at "misinform the user," not cross-user data exfiltration. |
+| Cost runaway via abuse of `bedrock:InvokeModel` | **IAM grant resource-scoped to the model ARN** in `lib/poller-server.js` — not `bedrock:*` and not `Resource: '*'`. The poller cannot invoke any model other than the pinned `BEDROCK_MODEL_ID`. Reserved-concurrency = 1 + clamped poll cadence (15-1440 min, see ADR 0003) cap the rate at which the grant can fire. Dedup gate short-circuits ~80% of poll cycles before any Bedrock call. AWS Budget alarm at $10/mo (planned, slice 9) is the safety net. |
+| Bedrock returns malformed / fence-wrapped / extra-keyed JSON | **Strict JSON-only parser in `bedrock_decide._parse_response`** — first char must be `{`, last `}`, top-level keys exactly `{alert, reason}`, types pinned (`bool` not `int`, non-empty string ≤200 chars). Any deviation routes to defensive fallback `{alert: False, reason: "model_response_invalid", bedrock_called: True}`. Six malformation cases covered in `test_bedrock_decide.py` group F. |
+| Bedrock outage triggers a flood of "decision failed" emails | **Defensive fallback is no-alert.** Network / IAM / throttle / parse failures all collapse to `alert: False`; the metric `bedrock_decisions_made` still increments (we tried) but no user-visible alert is sent. The user sees zero alerts during an outage, not bad ones. |
+| Model drift causes silent alert-quality regression | **Pinned model ID** (`BEDROCK_MODEL_ID` env var, defaults to `claude-haiku-4-5-20251001`) — Anthropic point releases don't change behaviour unless we deploy. **Eval framework** (`evals/`, slice 6 T3/T4) — 33+ hand-labelled cases + Sonnet 4.6 judge surface drift the next time a developer runs `python evals/run_evals.py`. Slice 9 will add the workflow_dispatch CI trigger. |
+| `ANTHROPIC_API_KEY` leak via report or logs (eval framework, not production) | Eval runner's `RunMetadata` carries only model ID, mode, and stub flag — never the API key. The judge client constructs `anthropic.Anthropic()` which reads `ANTHROPIC_API_KEY` from env automatically; the key never enters Python code that gets logged or written to a file. |
+| Judge model manipulated by malicious `reason` from under-test model | **Acknowledged residual risk.** The judge sees the under-test model's `reason` string as user-message data. A persuasive injection by the under-test model could in theory flip a judge verdict. Local-only eval runs cap the blast radius at "developer sees a wrong pass/fail rating," not user-facing impact. Captured in `evals/judge_client.py` docstring. |
+| `bedrockInferenceProfileArn` context override grants inference-profile access | The CDK construct synth-time validates the ARN format. The grant adds the inference-profile ARN as an additional resource (not a replacement) so the direct-model ARN remains scoped. |
+
+**What would change for production:**
+- AWS Budget alarm at $10/mo with SNS topic email subscription (slice 9).
+- Eval framework wired to CI on workflow_dispatch (slice 9) — manual trigger only to keep cost discipline.
+- Periodic golden-set expansion as production traffic surfaces edge
+  cases the hand-labelled corpus didn't cover.
+- Cloudwatch alarm on `bedrock_decisions_made` spiking above the
+  steady-state rate (would indicate a misbehaving cron, dedup
+  regression, or stuck loop).
+
 ### [4] Lambda → AWS services
 
 | Threat | Mitigation |
 |---|---|
-| Over-broad IAM | Each Lambda gets a least-privilege role: travel-agent has read/write on Watches, read on FareHistory, S3 on a single bucket, Bedrock-invoke. flights-mcp has zero AWS-resource permissions beyond CloudWatch Logs + X-Ray. |
-| Account-wide blast radius from a compromised Lambda | Resource-scoped policies (table ARNs, bucket ARNs) prevent lateral movement. |
-| Cost runaway | AWS Budget alarm at $10/mo (planned, slice 9). |
+| Over-broad IAM | Each Lambda gets a least-privilege role: travel-agent has read/write on Watches, read on FareHistory, S3 on a single bucket, Bedrock-invoke. flights-mcp has zero AWS-resource permissions beyond CloudWatch Logs + X-Ray. The poller adds `bedrock:InvokeModel` resource-scoped to the model ARN (ADR 0004 / boundary [6]). |
+| Account-wide blast radius from a compromised Lambda | Resource-scoped policies (table ARNs, bucket ARNs, model ARN) prevent lateral movement. |
+| Cost runaway | AWS Budget alarm at $10/mo (planned, slice 9). Poller-specific defences in boundary [6] cap the Bedrock surface independently. |
 
 ## Out of scope (explicit)
 
@@ -202,3 +232,9 @@ These are real risks the codebase does not address, by design for v1:
   Secrets row (line 64), this section's first row, and a `TODO(slice-9)`
   comment in `lib/strands-agent-on-lambda-stack.js` — ADR 0006 will
   resolve it.
+- **2026-05-13** — slice 6: appended [6] for the poller's Bedrock
+  InvokeModel boundary (prompt injection via provider strings, cost
+  runaway via the IAM grant, strict-JSON contract as the
+  bad-output defence, model drift surfaced by the new `evals/` framework).
+  ADR 0004 documents the model choice. [4]'s IAM row updated to
+  reference the new resource-scoped Bedrock grant.

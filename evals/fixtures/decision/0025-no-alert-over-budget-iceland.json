@@ -1,0 +1,54 @@
+{
+  "case_id": "0025-no-alert-over-budget-iceland",
+  "notes": "Snapshot $1980 is 13% over the $1750 budget. History is stable around that level so there's no anomaly to override the budget miss. Staying silent until prices come into range.",
+  "snapshot": {
+    "watchId": "w-025",
+    "timestamp": "2026-11-18T05:55:00+00:00",
+    "totalPrice": "1980.00",
+    "flightPrice": "1480.00",
+    "hotelPrice": "500.00",
+    "bestOfferBlob": {
+      "airline": "FI",
+      "flightNumber": "631",
+      "stops": 0,
+      "departDate": "2026-11-18T20:10:00",
+      "returnDate": "2026-11-23T06:55:00",
+      "hotelName": "Reykjavik Harbor House",
+      "checkin": "2026-11-18",
+      "checkout": "2026-11-23",
+      "bookingDeepLink": "https://booking-example.test/reykjavik-harbor"
+    }
+  },
+  "watch": {
+    "userId": "u-iceland",
+    "watchId": "w-025",
+    "type": "specific",
+    "origin": "BOS",
+    "destination": "Reykjavik",
+    "dateWindow": {
+      "earliestDepart": "2026-11-18",
+      "latestDepart": "2026-11-18",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1750.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-08-25T00:00:00+00:00",
+    "updatedAt": "2026-08-25T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1965.00"},
+    {"totalPrice": "1985.00"},
+    {"totalPrice": "1972.00"},
+    {"totalPrice": "1990.00"},
+    {"totalPrice": "1978.00"},
+    {"totalPrice": "1988.00"},
+    {"totalPrice": "1975.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["over budget", "no anomaly", "fare stable"]
+}

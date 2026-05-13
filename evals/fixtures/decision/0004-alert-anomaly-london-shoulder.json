@@ -1,0 +1,57 @@
+{
+  "case_id": "0004-alert-anomaly-london-shoulder",
+  "notes": "Snapshot total $890 lands 47% below the 30-day median of $1680. Sharp single-tick drop into shoulder-season territory; the watch was set up to catch exactly this kind of move. Also comfortably under budget.",
+  "snapshot": {
+    "watchId": "w-004",
+    "timestamp": "2026-09-12T07:15:00+00:00",
+    "totalPrice": "890.00",
+    "flightPrice": "640.00",
+    "hotelPrice": "250.00",
+    "bestOfferBlob": {
+      "airline": "BA",
+      "flightNumber": "286",
+      "stops": 0,
+      "departDate": "2026-09-12T19:40:00",
+      "returnDate": "2026-09-18T11:25:00",
+      "hotelName": "Bloomsbury Square Inn",
+      "checkin": "2026-09-12",
+      "checkout": "2026-09-18",
+      "bookingDeepLink": "https://example.test/hotels/h-004"
+    }
+  },
+  "watch": {
+    "userId": "u-london-shoulder",
+    "watchId": "w-004",
+    "type": "specific",
+    "origin": "SFO",
+    "destination": "London",
+    "dateWindow": {
+      "earliestDepart": "2026-09-12",
+      "latestDepart": "2026-09-12",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "1500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-06-01T00:00:00+00:00",
+    "updatedAt": "2026-06-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1670.00"},
+    {"totalPrice": "1685.00"},
+    {"totalPrice": "1690.00"},
+    {"totalPrice": "1660.00"},
+    {"totalPrice": "1695.00"},
+    {"totalPrice": "1678.00"},
+    {"totalPrice": "1682.00"},
+    {"totalPrice": "1672.00"},
+    {"totalPrice": "1688.00"},
+    {"totalPrice": "1680.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["anomaly", "below median", "rare drop"]
+}

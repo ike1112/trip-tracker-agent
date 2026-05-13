@@ -1,0 +1,54 @@
+{
+  "case_id": "0023-no-alert-over-budget-summer-peak",
+  "notes": "Snapshot $2480 is 24% above the $2000 budget. Summer peak pricing — fare history confirms this is the new normal, not a spike. No threshold headroom and no anomaly to override; staying silent is correct.",
+  "snapshot": {
+    "watchId": "w-023",
+    "timestamp": "2026-08-04T08:30:00+00:00",
+    "totalPrice": "2480.00",
+    "flightPrice": "1850.00",
+    "hotelPrice": "630.00",
+    "bestOfferBlob": {
+      "airline": "AA",
+      "flightNumber": "100",
+      "stops": 0,
+      "departDate": "2026-08-04T19:30:00",
+      "returnDate": "2026-08-10T13:45:00",
+      "hotelName": "Kensington Mews Hotel",
+      "checkin": "2026-08-04",
+      "checkout": "2026-08-10",
+      "bookingDeepLink": "https://example.test/hotels/kensington-mews"
+    }
+  },
+  "watch": {
+    "userId": "u-london-peak",
+    "watchId": "w-023",
+    "type": "specific",
+    "origin": "DFW",
+    "destination": "London",
+    "dateWindow": {
+      "earliestDepart": "2026-08-04",
+      "latestDepart": "2026-08-04",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "2000.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-05-15T00:00:00+00:00",
+    "updatedAt": "2026-05-15T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "2460.00"},
+    {"totalPrice": "2485.00"},
+    {"totalPrice": "2475.00"},
+    {"totalPrice": "2490.00"},
+    {"totalPrice": "2470.00"},
+    {"totalPrice": "2482.00"},
+    {"totalPrice": "2478.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["over budget", "no anomaly", "peak season"]
+}

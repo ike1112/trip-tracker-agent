@@ -1,0 +1,53 @@
+{
+  "case_id": "0032-no-alert-hotel-split-mexico-city",
+  "notes": "Flight is genuinely great ($310, well under historical) but the hotel at $760 is unusually expensive for the dates — pushes total to $1070, which is $20 over the user's $1050 budget. The flight win is real but the bundled total disqualifies; alerting would be misleading.",
+  "snapshot": {
+    "watchId": "w-032",
+    "timestamp": "2026-10-04T13:00:00+00:00",
+    "totalPrice": "1070.00",
+    "flightPrice": "310.00",
+    "hotelPrice": "760.00",
+    "bestOfferBlob": {
+      "airline": "AM",
+      "flightNumber": "499",
+      "stops": 0,
+      "departDate": "2026-10-04T08:25:00",
+      "returnDate": "2026-10-08T20:10:00",
+      "hotelName": "Roma Norte Design Hotel",
+      "checkin": "2026-10-04",
+      "checkout": "2026-10-08",
+      "bookingDeepLink": "https://example.test/hotels/roma-norte-design"
+    }
+  },
+  "watch": {
+    "userId": "u-mexico-city",
+    "watchId": "w-032",
+    "type": "specific",
+    "origin": "LAX",
+    "destination": "Mexico City",
+    "dateWindow": {
+      "earliestDepart": "2026-10-04",
+      "latestDepart": "2026-10-04",
+      "nights": 4
+    },
+    "pax": 1,
+    "maxTotalPrice": "1050.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-08-25T00:00:00+00:00",
+    "updatedAt": "2026-08-25T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1085.00"},
+    {"totalPrice": "1095.00"},
+    {"totalPrice": "1080.00"},
+    {"totalPrice": "1100.00"},
+    {"totalPrice": "1090.00"},
+    {"totalPrice": "1075.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["over budget", "hotel disqualifies", "flight cheap but bundle"]
+}

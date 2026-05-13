@@ -1,0 +1,72 @@
+{
+  "case_id": "0031-no-alert-stable-fare-vancouver",
+  "notes": "Twenty-five history rows span ±2% around $980. Today's snapshot at $982 is squarely inside the noise band. Well under budget at $1200 but the fare has been this way for weeks — no new information to convey.",
+  "snapshot": {
+    "watchId": "w-031",
+    "timestamp": "2026-09-05T07:25:00+00:00",
+    "totalPrice": "982.00",
+    "flightPrice": "640.00",
+    "hotelPrice": "342.00",
+    "bestOfferBlob": {
+      "airline": "AC",
+      "flightNumber": "303",
+      "stops": 0,
+      "departDate": "2026-09-05T10:00:00",
+      "returnDate": "2026-09-09T16:45:00",
+      "hotelName": "Gastown Riverside Inn",
+      "checkin": "2026-09-05",
+      "checkout": "2026-09-09",
+      "bookingDeepLink": "https://example.test/hotels/gastown-riverside"
+    }
+  },
+  "watch": {
+    "userId": "u-vancouver-stable",
+    "watchId": "w-031",
+    "type": "specific",
+    "origin": "SFO",
+    "destination": "Vancouver",
+    "dateWindow": {
+      "earliestDepart": "2026-09-05",
+      "latestDepart": "2026-09-05",
+      "nights": 4
+    },
+    "pax": 2,
+    "maxTotalPrice": "1200.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 0, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-07-21T00:00:00+00:00",
+    "updatedAt": "2026-07-21T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "975.00"},
+    {"totalPrice": "982.00"},
+    {"totalPrice": "979.00"},
+    {"totalPrice": "985.00"},
+    {"totalPrice": "977.00"},
+    {"totalPrice": "980.00"},
+    {"totalPrice": "983.00"},
+    {"totalPrice": "978.00"},
+    {"totalPrice": "984.00"},
+    {"totalPrice": "981.00"},
+    {"totalPrice": "976.00"},
+    {"totalPrice": "986.00"},
+    {"totalPrice": "979.00"},
+    {"totalPrice": "983.00"},
+    {"totalPrice": "977.00"},
+    {"totalPrice": "984.00"},
+    {"totalPrice": "980.00"},
+    {"totalPrice": "975.00"},
+    {"totalPrice": "988.00"},
+    {"totalPrice": "979.00"},
+    {"totalPrice": "983.00"},
+    {"totalPrice": "981.00"},
+    {"totalPrice": "977.00"},
+    {"totalPrice": "985.00"},
+    {"totalPrice": "980.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["fare stable", "long horizon", "tight band"]
+}

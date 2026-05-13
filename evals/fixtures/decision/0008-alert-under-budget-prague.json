@@ -1,0 +1,52 @@
+{
+  "case_id": "0008-alert-under-budget-prague",
+  "notes": "Snapshot $1120 is 70% of the $1600 budget — solid headroom. No prior alert on this watch so dedup is not in play. History is short but the threshold gate alone justifies firing.",
+  "snapshot": {
+    "watchId": "w-008",
+    "timestamp": "2026-09-25T14:20:00+00:00",
+    "totalPrice": "1120.00",
+    "flightPrice": "820.00",
+    "hotelPrice": "300.00",
+    "bestOfferBlob": {
+      "airline": "LH",
+      "flightNumber": "1394",
+      "stops": 1,
+      "departDate": "2026-09-25T18:00:00",
+      "returnDate": "2026-09-30T10:40:00",
+      "hotelName": "Old Town Stay Prague",
+      "checkin": "2026-09-25",
+      "checkout": "2026-09-30",
+      "bookingDeepLink": "https://example.test/hotels/old-town-prague"
+    }
+  },
+  "watch": {
+    "userId": "u-prague",
+    "watchId": "w-008",
+    "type": "specific",
+    "origin": "ORD",
+    "destination": "Prague",
+    "dateWindow": {
+      "earliestDepart": "2026-09-25",
+      "latestDepart": "2026-09-25",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1600.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-07-01T00:00:00+00:00",
+    "updatedAt": "2026-07-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1135.00"},
+    {"totalPrice": "1142.00"},
+    {"totalPrice": "1128.00"},
+    {"totalPrice": "1138.00"},
+    {"totalPrice": "1125.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "first match", "good price"]
+}

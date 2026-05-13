@@ -1,0 +1,55 @@
+{
+  "case_id": "0026-no-alert-over-budget-cape-town",
+  "notes": "Snapshot $2950 sits 18% above the $2500 budget. The history shows a mild downward trend but the current price is still firmly outside the user's stated ceiling and not anomalous against the median. No fire.",
+  "snapshot": {
+    "watchId": "w-026",
+    "timestamp": "2026-11-26T16:40:00+00:00",
+    "totalPrice": "2950.00",
+    "flightPrice": "2280.00",
+    "hotelPrice": "670.00",
+    "bestOfferBlob": {
+      "airline": "DL",
+      "flightNumber": "200",
+      "stops": 1,
+      "departDate": "2026-11-26T18:30:00",
+      "returnDate": "2026-12-03T07:50:00",
+      "hotelName": "Waterfront Cape Lodge",
+      "checkin": "2026-11-26",
+      "checkout": "2026-12-03",
+      "bookingDeepLink": "https://example.test/hotels/waterfront-cape"
+    }
+  },
+  "watch": {
+    "userId": "u-cape-town",
+    "watchId": "w-026",
+    "type": "specific",
+    "origin": "ATL",
+    "destination": "Cape Town",
+    "dateWindow": {
+      "earliestDepart": "2026-11-26",
+      "latestDepart": "2026-11-26",
+      "nights": 7
+    },
+    "pax": 1,
+    "maxTotalPrice": "2500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-08-30T00:00:00+00:00",
+    "updatedAt": "2026-08-30T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "3050.00"},
+    {"totalPrice": "3020.00"},
+    {"totalPrice": "3010.00"},
+    {"totalPrice": "2990.00"},
+    {"totalPrice": "2975.00"},
+    {"totalPrice": "2965.00"},
+    {"totalPrice": "2958.00"},
+    {"totalPrice": "2952.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["over budget", "no anomaly", "above ceiling"]
+}

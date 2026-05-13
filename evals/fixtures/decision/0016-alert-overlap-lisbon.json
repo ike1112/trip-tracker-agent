@@ -1,0 +1,58 @@
+{
+  "case_id": "0016-alert-overlap-lisbon",
+  "notes": "Snapshot $1085 is 62% of $1740 median and 68% of $1600 budget. Anomaly gate fires hard, threshold gate fires comfortably; no recent alert to dedup against. Clean overlap case.",
+  "snapshot": {
+    "watchId": "w-016",
+    "timestamp": "2026-08-29T10:25:00+00:00",
+    "totalPrice": "1085.00",
+    "flightPrice": "795.00",
+    "hotelPrice": "290.00",
+    "bestOfferBlob": {
+      "airline": "TP",
+      "flightNumber": "204",
+      "stops": 0,
+      "departDate": "2026-08-29T22:10:00",
+      "returnDate": "2026-09-04T13:00:00",
+      "hotelName": "Alfama Hillside",
+      "checkin": "2026-08-29",
+      "checkout": "2026-09-04",
+      "bookingDeepLink": "https://booking-example.test/alfama-hillside"
+    }
+  },
+  "watch": {
+    "userId": "u-lisbon",
+    "watchId": "w-016",
+    "type": "specific",
+    "origin": "BOS",
+    "destination": "Lisbon",
+    "dateWindow": {
+      "earliestDepart": "2026-08-29",
+      "latestDepart": "2026-08-29",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "1600.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-05-22T00:00:00+00:00",
+    "updatedAt": "2026-05-22T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1740.00"},
+    {"totalPrice": "1755.00"},
+    {"totalPrice": "1730.00"},
+    {"totalPrice": "1748.00"},
+    {"totalPrice": "1742.00"},
+    {"totalPrice": "1738.00"},
+    {"totalPrice": "1750.00"},
+    {"totalPrice": "1735.00"},
+    {"totalPrice": "1745.00"},
+    {"totalPrice": "1737.00"},
+    {"totalPrice": "1752.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["anomaly", "under budget", "both gates"]
+}

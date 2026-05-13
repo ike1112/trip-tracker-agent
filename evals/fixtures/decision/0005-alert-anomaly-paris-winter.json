@@ -1,0 +1,61 @@
+{
+  "case_id": "0005-alert-anomaly-paris-winter",
+  "notes": "Median of 14 history rows sits at $1420; today's snapshot is $710 — exactly half. This is the kind of fat-tail dip that won't repeat tomorrow, so the watch should fire even though budget headroom isn't the dominant signal.",
+  "snapshot": {
+    "watchId": "w-005",
+    "timestamp": "2026-11-08T03:42:00+00:00",
+    "totalPrice": "710.00",
+    "flightPrice": "480.00",
+    "hotelPrice": "230.00",
+    "bestOfferBlob": {
+      "airline": "AF",
+      "flightNumber": "65",
+      "stops": 0,
+      "departDate": "2026-11-08T16:10:00",
+      "returnDate": "2026-11-13T10:05:00",
+      "hotelName": "Le Marais Boutique",
+      "checkin": "2026-11-08",
+      "checkout": "2026-11-13",
+      "bookingDeepLink": "https://booking-example.test/le-marais"
+    }
+  },
+  "watch": {
+    "userId": "u-paris-1",
+    "watchId": "w-005",
+    "type": "specific",
+    "origin": "JFK",
+    "destination": "Paris",
+    "dateWindow": {
+      "earliestDepart": "2026-11-08",
+      "latestDepart": "2026-11-08",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 3},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-07-15T00:00:00+00:00",
+    "updatedAt": "2026-07-15T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1410.00"},
+    {"totalPrice": "1430.00"},
+    {"totalPrice": "1395.00"},
+    {"totalPrice": "1450.00"},
+    {"totalPrice": "1422.00"},
+    {"totalPrice": "1408.00"},
+    {"totalPrice": "1440.00"},
+    {"totalPrice": "1418.00"},
+    {"totalPrice": "1425.00"},
+    {"totalPrice": "1432.00"},
+    {"totalPrice": "1415.00"},
+    {"totalPrice": "1428.00"},
+    {"totalPrice": "1419.00"},
+    {"totalPrice": "1421.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["anomaly", "median deviation", "rare drop"]
+}

@@ -1,0 +1,54 @@
+{
+  "case_id": "0033-no-alert-hotel-split-buenos-aires",
+  "notes": "Long-haul flight at $720 is the best price in 30 days, but the only available hotel under the user's 4-star minimum runs $580/night. Total $1300 is well over the $1100 budget. Flight signal is real; the bundle is not.",
+  "snapshot": {
+    "watchId": "w-033",
+    "timestamp": "2026-11-22T17:50:00+00:00",
+    "totalPrice": "1300.00",
+    "flightPrice": "720.00",
+    "hotelPrice": "580.00",
+    "bestOfferBlob": {
+      "airline": "AR",
+      "flightNumber": "1301",
+      "stops": 1,
+      "departDate": "2026-11-22T22:30:00",
+      "returnDate": "2026-11-28T07:15:00",
+      "hotelName": "Recoleta Plaza Hotel",
+      "checkin": "2026-11-22",
+      "checkout": "2026-11-28",
+      "bookingDeepLink": "https://example.test/hotels/recoleta-plaza"
+    }
+  },
+  "watch": {
+    "userId": "u-buenos-aires",
+    "watchId": "w-033",
+    "type": "specific",
+    "origin": "MIA",
+    "destination": "Buenos Aires",
+    "dateWindow": {
+      "earliestDepart": "2026-11-22",
+      "latestDepart": "2026-11-22",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "1100.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-09-10T00:00:00+00:00",
+    "updatedAt": "2026-09-10T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1380.00"},
+    {"totalPrice": "1395.00"},
+    {"totalPrice": "1370.00"},
+    {"totalPrice": "1410.00"},
+    {"totalPrice": "1325.00"},
+    {"totalPrice": "1340.00"},
+    {"totalPrice": "1300.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["over budget", "hotel disqualifies", "long haul"]
+}

@@ -1,0 +1,54 @@
+{
+  "case_id": "0027-no-alert-gates-miss-zurich",
+  "notes": "Snapshot total $1820 is right at the user's $1800 ceiling and roughly equal to the 30-day median of $1810. No anomaly (within 1% of median), no budget headroom, no dedup conflict — every gate misses by a small margin. The system has no signal worth interrupting the user for.",
+  "snapshot": {
+    "watchId": "w-027",
+    "timestamp": "2026-11-10T14:00:00+00:00",
+    "totalPrice": "1820.00",
+    "flightPrice": "1320.00",
+    "hotelPrice": "500.00",
+    "bestOfferBlob": {
+      "airline": "LX",
+      "flightNumber": "41",
+      "stops": 1,
+      "departDate": "2026-11-10T17:45:00",
+      "returnDate": "2026-11-15T11:20:00",
+      "hotelName": "Limmat Riverfront Hotel",
+      "checkin": "2026-11-10",
+      "checkout": "2026-11-15",
+      "bookingDeepLink": "https://example.test/hotels/limmat-riverfront"
+    }
+  },
+  "watch": {
+    "userId": "u-zurich",
+    "watchId": "w-027",
+    "type": "specific",
+    "origin": "BOS",
+    "destination": "Zurich",
+    "dateWindow": {
+      "earliestDepart": "2026-11-10",
+      "latestDepart": "2026-11-10",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1800.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-08-12T00:00:00+00:00",
+    "updatedAt": "2026-08-12T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1805.00"},
+    {"totalPrice": "1815.00"},
+    {"totalPrice": "1810.00"},
+    {"totalPrice": "1820.00"},
+    {"totalPrice": "1812.00"},
+    {"totalPrice": "1808.00"},
+    {"totalPrice": "1818.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["no anomaly", "no budget headroom", "no signal"]
+}

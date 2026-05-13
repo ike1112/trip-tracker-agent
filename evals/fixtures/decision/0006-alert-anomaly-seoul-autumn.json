@@ -1,0 +1,67 @@
+{
+  "case_id": "0006-alert-anomaly-seoul-autumn",
+  "notes": "20-row history clusters around $2050 with std dev under 4%. Snapshot at $1180 is 58% of median — well past the anomaly threshold. Even though it's within budget, the dominant signal is the deviation from the rolling baseline.",
+  "snapshot": {
+    "watchId": "w-006",
+    "timestamp": "2026-10-22T22:08:00+00:00",
+    "totalPrice": "1180.00",
+    "flightPrice": "880.00",
+    "hotelPrice": "300.00",
+    "bestOfferBlob": {
+      "airline": "KE",
+      "flightNumber": "12",
+      "stops": 0,
+      "departDate": "2026-10-22T11:50:00",
+      "returnDate": "2026-10-28T13:40:00",
+      "hotelName": "Myeongdong Garden Hotel",
+      "checkin": "2026-10-22",
+      "checkout": "2026-10-28",
+      "bookingDeepLink": "https://example.test/hotels/myeongdong"
+    }
+  },
+  "watch": {
+    "userId": "u-seoul",
+    "watchId": "w-006",
+    "type": "specific",
+    "origin": "LAX",
+    "destination": "Seoul",
+    "dateWindow": {
+      "earliestDepart": "2026-10-22",
+      "latestDepart": "2026-10-22",
+      "nights": 6
+    },
+    "pax": 2,
+    "maxTotalPrice": "2500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-06-20T00:00:00+00:00",
+    "updatedAt": "2026-06-20T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "2040.00"},
+    {"totalPrice": "2060.00"},
+    {"totalPrice": "2055.00"},
+    {"totalPrice": "2030.00"},
+    {"totalPrice": "2075.00"},
+    {"totalPrice": "2050.00"},
+    {"totalPrice": "2065.00"},
+    {"totalPrice": "2045.00"},
+    {"totalPrice": "2058.00"},
+    {"totalPrice": "2070.00"},
+    {"totalPrice": "2035.00"},
+    {"totalPrice": "2052.00"},
+    {"totalPrice": "2048.00"},
+    {"totalPrice": "2062.00"},
+    {"totalPrice": "2042.00"},
+    {"totalPrice": "2057.00"},
+    {"totalPrice": "2068.00"},
+    {"totalPrice": "2049.00"},
+    {"totalPrice": "2053.00"},
+    {"totalPrice": "2051.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["anomaly", "below median", "tight baseline"]
+}

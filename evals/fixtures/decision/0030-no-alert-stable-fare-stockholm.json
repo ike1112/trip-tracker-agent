@@ -1,0 +1,67 @@
+{
+  "case_id": "0030-no-alert-stable-fare-stockholm",
+  "notes": "Fare has been flat to within ±1.5% across 20 polls over the last 30 days. Snapshot at $1450 sits right in the middle of that band. Under budget but the price is genuinely normal — alerting on this would be alerting on noise.",
+  "snapshot": {
+    "watchId": "w-030",
+    "timestamp": "2026-08-17T11:15:00+00:00",
+    "totalPrice": "1450.00",
+    "flightPrice": "1020.00",
+    "hotelPrice": "430.00",
+    "bestOfferBlob": {
+      "airline": "SK",
+      "flightNumber": "936",
+      "stops": 1,
+      "departDate": "2026-08-17T17:30:00",
+      "returnDate": "2026-08-22T08:50:00",
+      "hotelName": "Gamla Stan Heritage Hotel",
+      "checkin": "2026-08-17",
+      "checkout": "2026-08-22",
+      "bookingDeepLink": "https://example.test/hotels/gamla-stan-heritage"
+    }
+  },
+  "watch": {
+    "userId": "u-stockholm-stable",
+    "watchId": "w-030",
+    "type": "specific",
+    "origin": "EWR",
+    "destination": "Stockholm",
+    "dateWindow": {
+      "earliestDepart": "2026-08-17",
+      "latestDepart": "2026-08-17",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1600.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-06-10T00:00:00+00:00",
+    "updatedAt": "2026-06-10T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1445.00"},
+    {"totalPrice": "1452.00"},
+    {"totalPrice": "1448.00"},
+    {"totalPrice": "1455.00"},
+    {"totalPrice": "1443.00"},
+    {"totalPrice": "1450.00"},
+    {"totalPrice": "1447.00"},
+    {"totalPrice": "1453.00"},
+    {"totalPrice": "1451.00"},
+    {"totalPrice": "1446.00"},
+    {"totalPrice": "1449.00"},
+    {"totalPrice": "1454.00"},
+    {"totalPrice": "1448.00"},
+    {"totalPrice": "1452.00"},
+    {"totalPrice": "1450.00"},
+    {"totalPrice": "1444.00"},
+    {"totalPrice": "1456.00"},
+    {"totalPrice": "1447.00"},
+    {"totalPrice": "1453.00"},
+    {"totalPrice": "1449.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["fare stable", "no anomaly", "tight history"]
+}

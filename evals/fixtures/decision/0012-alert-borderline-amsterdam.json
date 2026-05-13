@@ -1,0 +1,55 @@
+{
+  "case_id": "0012-alert-borderline-amsterdam",
+  "notes": "Snapshot $1350 is ~85% of the $1590 median and ~90% of the $1500 budget. Neither signal alone is a slam-dunk, but stacked they show a watch where price is meaningfully below baseline and just inside the user's ceiling — alert is warranted.",
+  "snapshot": {
+    "watchId": "w-012",
+    "timestamp": "2026-09-08T13:30:00+00:00",
+    "totalPrice": "1350.00",
+    "flightPrice": "1000.00",
+    "hotelPrice": "350.00",
+    "bestOfferBlob": {
+      "airline": "KL",
+      "flightNumber": "642",
+      "stops": 0,
+      "departDate": "2026-09-08T17:25:00",
+      "returnDate": "2026-09-13T11:10:00",
+      "hotelName": "Canal Loft Amsterdam",
+      "checkin": "2026-09-08",
+      "checkout": "2026-09-13",
+      "bookingDeepLink": "https://example.test/hotels/canal-loft"
+    }
+  },
+  "watch": {
+    "userId": "u-amsterdam",
+    "watchId": "w-012",
+    "type": "specific",
+    "origin": "BOS",
+    "destination": "Amsterdam",
+    "dateWindow": {
+      "earliestDepart": "2026-09-08",
+      "latestDepart": "2026-09-08",
+      "nights": 5
+    },
+    "pax": 1,
+    "maxTotalPrice": "1500.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-06-10T00:00:00+00:00",
+    "updatedAt": "2026-06-10T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1580.00"},
+    {"totalPrice": "1595.00"},
+    {"totalPrice": "1605.00"},
+    {"totalPrice": "1588.00"},
+    {"totalPrice": "1592.00"},
+    {"totalPrice": "1585.00"},
+    {"totalPrice": "1600.00"},
+    {"totalPrice": "1590.00"}
+  ],
+  "expected_alert": true,
+  "expected_reason_themes": ["under budget", "below median", "combined signal"]
+}

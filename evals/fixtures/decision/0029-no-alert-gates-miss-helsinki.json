@@ -1,0 +1,56 @@
+{
+  "case_id": "0029-no-alert-gates-miss-helsinki",
+  "notes": "Total of $1610 is 2% above the 30-day median ($1580) and only $40 below budget ($1650). Neither anomaly (would need ≤85% of median) nor threshold (would need clear budget headroom) passes. Just a normal Tuesday in the fare history.",
+  "snapshot": {
+    "watchId": "w-029",
+    "timestamp": "2026-12-03T15:45:00+00:00",
+    "totalPrice": "1610.00",
+    "flightPrice": "1150.00",
+    "hotelPrice": "460.00",
+    "bestOfferBlob": {
+      "airline": "AY",
+      "flightNumber": "105",
+      "stops": 0,
+      "departDate": "2026-12-03T13:50:00",
+      "returnDate": "2026-12-09T09:15:00",
+      "hotelName": "Esplanadi Boutique Hotel",
+      "checkin": "2026-12-03",
+      "checkout": "2026-12-09",
+      "bookingDeepLink": "https://example.test/hotels/esplanadi-boutique"
+    }
+  },
+  "watch": {
+    "userId": "u-helsinki",
+    "watchId": "w-029",
+    "type": "specific",
+    "origin": "ORD",
+    "destination": "Helsinki",
+    "dateWindow": {
+      "earliestDepart": "2026-12-03",
+      "latestDepart": "2026-12-03",
+      "nights": 6
+    },
+    "pax": 1,
+    "maxTotalPrice": "1650.00",
+    "alertStrategy": "both",
+    "preferences": {"maxStops": 1, "hotelMinStars": 4},
+    "status": "active",
+    "lastAlertedAt": null,
+    "lastAlertedPrice": null,
+    "createdAt": "2026-09-01T00:00:00+00:00",
+    "updatedAt": "2026-09-01T00:00:00+00:00"
+  },
+  "history": [
+    {"totalPrice": "1575.00"},
+    {"totalPrice": "1585.00"},
+    {"totalPrice": "1580.00"},
+    {"totalPrice": "1572.00"},
+    {"totalPrice": "1590.00"},
+    {"totalPrice": "1582.00"},
+    {"totalPrice": "1578.00"},
+    {"totalPrice": "1595.00"},
+    {"totalPrice": "1610.00"}
+  ],
+  "expected_alert": false,
+  "expected_reason_themes": ["no anomaly", "above median", "thin headroom"]
+}
