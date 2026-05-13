@@ -13,8 +13,10 @@ envelope, never user input. The poller does not parse anything out of
 `event` and never trusts it.
 """
 
+import json
 import os
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.typing import LambdaContext
@@ -178,6 +180,81 @@ def _poll_one(watch: dict) -> None:
     )
     if decision["alert"]:
         metrics.increment(metrics.ALERTS_SENT)
+        _async_invoke_notifier(snapshot, watch, decision, log_extra)
+
+
+def _decimal_to_str(value):
+    """Recursive Decimal -> str coercion for JSON-payload safety. The
+    notifier expects numeric snapshot fields as strings (matching the
+    on-the-wire shape its loader / template handle); boto3's invoke
+    payload also can't serialise raw Decimals."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _decimal_to_str(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_decimal_to_str(v) for v in value]
+    return value
+
+
+_lambda_client = None
+
+
+def _get_lambda_client():
+    """Lazy boto3 lambda client. Constructed on first use so the cold-
+    start cost is paid once per Lambda container, not per poll."""
+    global _lambda_client
+    if _lambda_client is None:
+        import boto3
+        _lambda_client = boto3.client("lambda")
+    return _lambda_client
+
+
+def _async_invoke_notifier(snapshot: dict, watch: dict, decision: dict, log_extra: dict) -> None:
+    """Fire-and-forget invoke of the notifier Lambda.
+
+    Async (`InvocationType=Event`) so a slow SES send doesn't extend
+    poll-cycle wall time. Failures during the local invoke are logged
+    but never raised — the alert is lost for this cycle, but the
+    next poll's dedup gate gives us a natural retry surface.
+
+    If `NOTIFIER_FUNCTION_NAME` is unset (e.g. local invocation, an
+    older stack, or a manual debugging run), log a WARNING and skip.
+    """
+    fn_name = os.environ.get("NOTIFIER_FUNCTION_NAME", "").strip()
+    if not fn_name:
+        logger.warning(
+            "notifier_function_name_missing",
+            extra=log_extra,
+        )
+        return
+
+    try:
+        # Serialise inside the try so a future Decimal-laden field
+        # that `_decimal_to_str` misses (raising TypeError in
+        # json.dumps) is caught with the same containment guarantee
+        # as a boto3 invoke failure — the poll loop is never killed
+        # by a serialisation bug.
+        payload = {
+            "snapshot": _decimal_to_str(snapshot),
+            "watch": _decimal_to_str(watch),
+            "decision": decision,
+        }
+        payload_bytes = json.dumps(payload).encode("utf-8")
+        _get_lambda_client().invoke(
+            FunctionName=fn_name,
+            InvocationType="Event",
+            Payload=payload_bytes,
+        )
+    except Exception as e:
+        # Log only the exception class name. A raw ClientError from
+        # lambda.invoke can include the function ARN; downstream
+        # error classes might include richer payloads. Class name
+        # is sufficient for triage and removes the latent leak.
+        logger.warning(
+            "notifier_invoke_failed",
+            extra={**log_extra, "error": type(e).__name__},
+        )
 
 
 def handler(event: dict, context: LambdaContext) -> dict:
@@ -215,8 +292,7 @@ def handler(event: dict, context: LambdaContext) -> dict:
             metrics.increment(metrics.WATCHES_ERRORED)
             # Deliberately do NOT log `e.body` — it may contain reflected
             # request fragments (incl. our own JWT parse errors). Surface
-            # only the categorised reason + HTTP status. See security audit
-            # LOW-1.
+            # only the categorised reason + HTTP status.
             logger.warning(
                 "watch_errored",
                 extra={

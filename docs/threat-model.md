@@ -196,13 +196,45 @@ and the strict-JSON contract.
   steady-state rate (would indicate a misbehaving cron, dedup
   regression, or stuck loop).
 
+### [7] Notifier → SES + Watches DDB UpdateItem
+
+The notifier Lambda is invoked async by the poller when
+`decision.alert` is True. It composes a plain-text email from the
+`(snapshot, watch, decision)` payload, sends via SES, and writes
+`lastAlertedAt` + `lastAlertedPrice` back to the Watches row so the
+dedup gate can do its job on the next poll. ADR 0005 documents the
+at-least-once / price-proximity-dedup semantics.
+
+| Threat | Mitigation |
+|---|---|
+| Notifier sends AS an unverified or attacker-controlled identity | **`ses:SendEmail` IAM grant resource-scoped to the sender identity ARN** assembled from the synth-time-validated `notifierSenderEmail` context. The notifier cannot send as any other identity in the account. The verified-identity setup itself is a manual out-of-band step (AWS console / `VerifyEmailIdentity` API); README documents it. |
+| Recipient enumeration / spam | Single-recipient v1 deploys with the recipient pinned in CDK context at synth time. The notifier has no input that can redirect delivery. Multi-user lookup is an upgrade path (ADR 0005); when it lands, the Cognito-lookup path becomes a second injection surface to audit. |
+| Email-body content controlled by the model output | **Plain-text email only.** The template's `reason` interpolation has no HTML escape (none needed — plain text IS the escape). Defence-in-depth: the upstream `bedrock_decide` parser already rejects HTML chars, C0 controls, bidi codepoints, and non-UTF-8 strings in `reason` (boundary [6]); the template strips CR/LF/controls from the subject line to defeat header injection even if the destination string is somehow polluted. |
+| Notifier writes outside the Watches row | **`dynamodb:UpdateItem` IAM grant scoped to the Watches table only** — no put, no delete, no scan, no access to FareHistory. The `UpdateExpression` only sets `lastAlertedAt` + `lastAlertedPrice`; other Watches fields are untouched (test_writer Group D). |
+| Out-of-order async retry backdates the dedup state | **Conditional update** with `attribute_not_exists(lastAlertedAt) OR lastAlertedAt < :now`. A retry whose clock lands before the first attempt's writeback fails the condition and raises `WritebackConflictError`; the alert was delivered, the handler logs and returns 200. |
+| Duplicate alerts during retry | **Acknowledged residual risk.** Lambda async retry on SES failure may resend; a DDB write-after-SES-success failure leaves dedup state stale until the next poll. **Bound:** the price-proximity dedup band (5%) catches identical-price duplicates at the next poll. ADR 0005's "Cost" section names this trade-off explicitly. |
+| Recipient email / model `reason` leak into structured logs | **Notifier side:** the `notification_sent` log carries `watch_id`, `user_id_prefix` (first 8 chars of the Cognito sub only), and `message_id`. Never the full recipient email, never the full `user_id`, never the `reason` string. Failure-path logs (`ses_send_failed`, `notifier_invoke_failed`) carry only the exception class name — the AWS error message body is dropped to defeat future error-class leaks (e.g. `MessageRejected: Email address is not verified: <recipient>`). Asserted by `test_handler.py` group F + `test_C4`. **Poller side** (separate audit point): the `decision_made` log carries the full `reason` string for debugging the model output; this is the audit channel for what the model decided. `reason` is already stripped of HTML/control/bidi chars by `bedrock_decide` (boundary [6]) so the log carries no exploitable content. |
+| SES throttling / outage stalls alerts | Lambda async retry (default 2 retries) handles transient SES errors. After retry exhaustion the invocation is lost — acceptable for v1; a production deploy adds a DLQ + CloudWatch alarm on async-invoke failures. |
+
+**What would change for production:**
+- DLQ on the notifier's async-invoke configuration + CloudWatch
+  alarm on DLQ depth.
+- Bounce / complaint feedback via SNS topic, parsed by a small
+  Lambda that flags problematic recipients in the Watches table.
+- Multi-user recipient lookup via Cognito (replaces the
+  CDK-context single-recipient pattern) — adds an authn-context
+  injection surface to audit.
+- HTML email template — requires autoescape at every
+  interpolation point; not added in v1 because plain text is
+  cheaper to keep safe.
+
 ### [4] Lambda → AWS services
 
 | Threat | Mitigation |
 |---|---|
-| Over-broad IAM | Each Lambda gets a least-privilege role: travel-agent has read/write on Watches, read on FareHistory, S3 on a single bucket, Bedrock-invoke. flights-mcp has zero AWS-resource permissions beyond CloudWatch Logs + X-Ray. The poller adds `bedrock:InvokeModel` resource-scoped to the model ARN (ADR 0004 / boundary [6]). |
-| Account-wide blast radius from a compromised Lambda | Resource-scoped policies (table ARNs, bucket ARNs, model ARN) prevent lateral movement. |
-| Cost runaway | AWS Budget alarm at $10/mo (planned, slice 9). Poller-specific defences in boundary [6] cap the Bedrock surface independently. |
+| Over-broad IAM | Each Lambda gets a least-privilege role: travel-agent has read/write on Watches, read on FareHistory, S3 on a single bucket, Bedrock-invoke. flights-mcp has zero AWS-resource permissions beyond CloudWatch Logs + X-Ray. The poller adds `bedrock:InvokeModel` resource-scoped to the model ARN (ADR 0004 / boundary [6]) and `lambda:InvokeFunction` on the notifier ARN. The notifier adds `ses:SendEmail` resource-scoped to the sender identity (ADR 0005 / boundary [7]) and `dynamodb:UpdateItem` on the Watches table. |
+| Account-wide blast radius from a compromised Lambda | Resource-scoped policies (table ARNs, bucket ARNs, model ARN, SES identity ARN, function ARN) prevent lateral movement. |
+| Cost runaway | AWS Budget alarm at $10/mo (deferred). Poller-specific defences in boundary [6] cap the Bedrock surface independently. SES sandbox limits + the single-recipient pin cap the email surface. |
 
 ## Out of scope (explicit)
 
@@ -238,3 +270,11 @@ These are real risks the codebase does not address, by design for v1:
   bad-output defence, model drift surfaced by the new `evals/` framework).
   ADR 0004 documents the model choice. [4]'s IAM row updated to
   reference the new resource-scoped Bedrock grant.
+- **2026-05-13** — alert notifier: appended [7] for the
+  notifier-to-SES + Watches DDB UpdateItem boundary (identity
+  spoofing via the resource-scoped SES grant; email-body content
+  control via plain-text + parser-hardened `reason`; out-of-order
+  retry handled by the writer's conditional update; duplicate-alert
+  window bounded by the dedup gate's price-proximity band). ADR
+  0005 documents the at-least-once trade-off. [4]'s IAM row updated
+  to reference the new SES + Lambda invoke grants.

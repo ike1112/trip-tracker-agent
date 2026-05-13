@@ -9,3 +9,4 @@ cdk.out
 __pycache__
 .pytest_cache
 .claude/prp-ralph.state.md
+.cache
