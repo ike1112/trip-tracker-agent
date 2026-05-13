@@ -2,38 +2,35 @@
 
 Companion to [`slice-6-bedrock-decision.plan.md`](./slice-6-bedrock-decision.plan.md). One checklist per task.
 
-## Task 1 — `bedrock_decide.py` + unit tests (mocked boto3)
+## Task 1 — `bedrock_decide.py` + unit tests (mocked boto3) — ✅ DONE (commit `16b6a96`)
 
-- [ ] **Multi-model gate (test design FIRST):** spawn `agent-skills:test-engineer` (Sonnet) for the parser/fallback test matrix
-- [ ] `bedrock_decide.py` — boto3 InvokeModel wrapper, prompt builder, strict JSON parser
-- [ ] `BEDROCK_MODE` env var (live/stub) at module load
-- [ ] `BEDROCK_MODEL_ID` env var, default `claude-haiku-4-5-20251001`
-- [ ] Defensive fallback: parse/IAM/network failures → `{alert: False, reason: "model_response_invalid"|"model_call_failed", bedrock_called: True}`
-- [ ] Tests:
-  - [ ] `test_bedrock_decide.py` — prompt determinism, JSON-only parsing positive + 6 malformation cases, IAM error fallback, throttle fallback, stub-mode shape, live-mode happy path
-- [ ] No real Bedrock calls during pytest
-- [ ] `pytest` green
-- [ ] Commit
+- [x] **Multi-model gate (test design FIRST):** spawn `agent-skills:test-engineer` (Sonnet) for the parser/fallback test matrix
+- [x] `bedrock_decide.py` — boto3 InvokeModel wrapper, prompt builder, strict JSON parser
+- [x] `BEDROCK_MODE` env var (live/stub) at module load
+- [x] `BEDROCK_MODEL_ID` env var, default `claude-haiku-4-5-20251001`
+- [x] Defensive fallback: parse/IAM/network failures → `{alert: False, reason: "model_response_invalid"|"model_call_failed", bedrock_called: True}`
+- [x] Tests: `test_bedrock_decide.py` — 39 tests across 10 groups (parsing, injection safety, error paths, mode selection, content pinning, etc.)
+- [x] No real Bedrock calls during pytest
+- [x] `pytest` green (168 passing)
+- [x] Commit
 
-## Task 2 — Wire `decision.py` + CDK IAM + integration test
+## Task 2 — Wire `decision.py` + CDK IAM + integration test — ✅ DONE (commit `5e5a49e`)
 
-- [ ] `decision.py` — replace stub body with `bedrock_decide.decide(...)` call
-- [ ] `lib/poller-server.js` — `bedrock:InvokeModel` IAM grant resource-scoped to the model ARN; `BEDROCK_MODEL_ID` + `BEDROCK_MODE` env vars
-- [ ] `tests/conftest.py` — set `BEDROCK_MODE=stub` in fixture env so existing 129 tests don't change behaviour
-- [ ] Tests:
-  - [ ] `test_decision.py` updated — stub-mode tests still green; new live-mode tests assert `bedrock_decide` invoked
-  - [ ] `test_decision_live_mode.py` — integration with mocked Bedrock client
-- [ ] `pytest` green (all 129 slice-5 + new T1/T2)
-- [ ] **Multi-model gate:** spawn `agent-skills:security-auditor` (Sonnet) on IAM grant + Bedrock cost surface
-- [ ] Address findings
-- [ ] Commit
+- [x] `decision.py` — delegates to `bedrock_decide.decide(...)` when gates pass; pre-gate skips short-circuit before any model call
+- [x] `lib/poller-server.js` — `bedrock:InvokeModel` IAM grant resource-scoped to the model ARN; `BEDROCK_MODEL_ID` + `BEDROCK_MODE` env vars; synth-time validation of context values
+- [x] `tests/conftest.py` — sets `BEDROCK_MODE=stub` at module load so the full suite stays cost-free
+- [x] Tests: `test_decision.py` updated; `test_decision_live_mode.py` adds 6 live-mode tests via mocked Bedrock client
+- [x] `pytest` green (174 passing: 129 prior + 39 T1 + 6 T2)
+- [x] **Multi-model gate:** `agent-skills:security-auditor` (Sonnet) — fix-then-ship; addressed inference-profile ARN format + bedrockMode allowlist
+- [x] Findings addressed
+- [x] Commit
 
-### → Checkpoint A
-- [ ] Mocked end-to-end Bedrock pipeline working
-- [ ] **Spawn `agent-skills:code-reviewer` (Sonnet)** on bedrock_decide + decision + CDK changes
-- [ ] Address findings
-- [ ] Human approval before Task 3
-- [ ] Commit
+### → Checkpoint A — ✅ PASSED
+- [x] Mocked end-to-end Bedrock pipeline working
+- [x] `agent-skills:code-reviewer` (Sonnet) — APPROVE with fixes; replaced misleading no-call test with patched-client version, removed dead branches
+- [x] Findings addressed
+- [x] Human approval before Task 3 (2026-05-13)
+- [x] Pre-flight cleanup commit `ce13c80` — stripped stale task-context refs from source comments before T3 starts
 
 ## Task 3 — Eval scaffolding + runner tests
 
