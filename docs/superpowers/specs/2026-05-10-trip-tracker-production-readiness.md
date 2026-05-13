@@ -200,7 +200,7 @@ Extends design-spec §9. Completion targets each item to the slice that closes i
 - [x] (slice 4) `hotels-mcp` Lambda + fixture mode + threat-model LiteAPI section
 - [x] (slice 5) Poller Lambda + EventBridge + structured logs + X-Ray on all Lambdas + CloudWatch metrics + ADR 0003
 - [x] (slice 6) Bedrock decision + eval baseline report committed (`evals/results/`) + ADR 0004
-- [ ] (slice 7) Notifier + SES + ADR 0005 + markdown-safe email template
+- [x] (slice 7) Notifier + SES + ADR 0005 + markdown-safe email template
 - [ ] (slice 8) `bookings-mcp` removed + CloudWatch dashboard committed
 - [ ] (slice 9) CI green + README rewritten + ADR 0006/0007 written + threat model committed + LICENSE + `.env.example` + Loom recorded + AWS Budget alarm deployed
 - [ ] (post-launch, design-spec §9) One real watch active for 7 days before declaring done
