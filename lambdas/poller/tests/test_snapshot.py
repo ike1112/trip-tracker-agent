@@ -1,6 +1,6 @@
 """Tests for `snapshot.compose_snapshot`.
 
-Scope, per the T3 test design (test-engineer subagent, 2026-05-10):
+Scope:
 - Cheapest-of-list with deterministic tiebreaker
 - Empty input guards (flight, hotel, both)
 - Field-by-field bestOfferBlob shape
@@ -9,8 +9,9 @@ Scope, per the T3 test design (test-engineer subagent, 2026-05-10):
 - Tie-break determinism
 - Currency mismatch raises (USD-only invariant)
 
-Follows the prescribed Decimal handling: every price comparison uses
-`Decimal("1148.00")` literals, never floats and never `pytest.approx`.
+Decimal handling: every price comparison uses `Decimal("1148.00")`
+literals, never floats and never `pytest.approx` — this matches the
+real DDB round-trip semantics the composer is built around.
 """
 
 from datetime import datetime, timezone

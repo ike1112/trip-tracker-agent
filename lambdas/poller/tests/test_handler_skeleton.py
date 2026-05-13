@@ -1,17 +1,16 @@
-"""Tests for `app.handler` Task 1 surface.
+"""Tests for the enumeration + structured-logging surface of `app.handler`.
 
-At T1 the handler only enumerates active watches and emits one structured
-log per row, plus a `poll_complete` summary. The contract these tests pin
-down:
+Pins down the per-poll log contract regardless of what happens downstream:
   - One `watch_polled` log per active watch with `watch_id`,
     `user_id_prefix`, `destination` fields.
   - A trailing `poll_complete` log with the count.
   - The returned dict contains `watches_polled = <count>`.
-  - Inactive watches are NOT logged (filter must be enforced at enumerator,
-    not in the handler).
+  - Inactive watches are NOT logged (the filter must be enforced at the
+    enumerator, not in the handler).
 
-Captured via the `MemoryLogHandler` attached in conftest — see its docstring
-for why neither `capsys`/`capfd` nor `caplog` work reliably with powertools.
+Captured via the `MemoryLogHandler` attached in conftest — see its
+docstring for why neither `capsys`/`capfd` nor `caplog` work reliably
+with powertools.
 """
 
 import logging
@@ -26,11 +25,11 @@ def _events(records: list[logging.LogRecord], name: str) -> list[logging.LogReco
 
 
 def test_handler_logs_one_event_per_active_watch(app_module, monkeypatch):
-    """T1 contract — verifies the enumerator's filter survives at the
-    handler boundary. We point the handler at a dead MCP endpoint so each
-    watch errors after the watch_polled log; that gives us the count
-    without standing up a mock MCP server (which has its own coverage in
-    test_handler_with_mcp.py).
+    """Verifies the enumerator's active-only filter survives at the
+    handler boundary. We point the handler at a dead MCP endpoint so
+    each watch errors after the watch_polled log; that gives us the
+    count without standing up a mock MCP server (which has its own
+    coverage in test_handler_with_mcp.py).
     """
     app, watches, _, log = app_module
     monkeypatch.setattr(app, "FLIGHTS_MCP_ENDPOINT", "http://127.0.0.1:1/dead")

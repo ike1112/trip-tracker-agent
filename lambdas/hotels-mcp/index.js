@@ -1,9 +1,9 @@
 /**
  * Lambda entrypoint for the hotels MCP server. Same shape as
- * lambdas/flights-mcp/index.js (see slice 3 + ADR 0002 for the
- * direct-handler reasoning) with one observability addition: a
- * `latency_ms` field on every mcp_request log so a slow-LiteAPI
- * incident is one CloudWatch query away.
+ * lambdas/flights-mcp/index.js (see ADR 0002 for the direct-handler
+ * reasoning) with one observability addition: a `latency_ms` field on
+ * every mcp_request log so a slow-LiteAPI incident is one CloudWatch
+ * query away.
  *
  * Identical-but-duplicated to flights-mcp:
  *   - LambdaTransport adapter

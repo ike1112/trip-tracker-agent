@@ -1,5 +1,5 @@
-"""End-to-end T3 test — handler walks active watches, calls mock MCPs,
-writes FareHistory rows.
+"""End-to-end snapshot-write test — handler walks active watches, calls
+mock MCPs, writes FareHistory rows.
 
 Builds on `test_handler_with_mcp.py`'s mock servers but additionally
 asserts on the FareHistory table state after the handler returns.

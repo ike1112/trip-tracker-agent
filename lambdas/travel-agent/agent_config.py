@@ -2,9 +2,9 @@ from strands.models import BedrockModel
 
 # Chat agent model. Inherited from the original scaffold (Claude 3.5 Haiku via
 # Bedrock cross-region inference profile). Design-spec §4 calls for Sonnet 4.6
-# for the chat agent because watch-creation flows need stronger reasoning, but
-# that swap is its own change and not part of slice 2's scope. The poller's
-# alert-worthiness call (slice 6) will pick its model independently.
+# for the chat agent because watch-creation flows need stronger reasoning;
+# upgrading the chat model is tracked separately. The poller picks its own
+# alert-decision model independently (see `lambdas/poller/bedrock_decide.py`).
 model = BedrockModel(
     region_name="us-east-1",
     model_id="us.anthropic.claude-3-5-haiku-20241022-v1:0",

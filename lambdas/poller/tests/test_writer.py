@@ -1,7 +1,9 @@
 """Tests for `writer.write_snapshot` — DDB round-trip + idempotency.
 
-Per the T3 test design: every test reads back the written row and asserts
-on observable attributes. No "does not raise" smoke tests.
+Every test reads the written row back from the (moto-mocked) table and
+asserts on observable attributes. No "does not raise" smoke tests — a
+silent write that drops a field would pass that bar but corrupt the
+FareHistory time series.
 """
 
 from decimal import Decimal

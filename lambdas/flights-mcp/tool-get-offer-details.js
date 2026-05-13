@@ -24,5 +24,5 @@ async function handler({ offerId }) {
     };
 }
 
-// Renamed from `get_offer_details` to disambiguate from the hotels-mcp tool. (slice 4)
+// Renamed from `get_offer_details` to disambiguate from the hotels-mcp tool.
 export default ['get_flight_offer_details', description, schema, handler];

@@ -1,10 +1,10 @@
-"""Integration tests for the T4 handler — full pipeline through decision.
+"""Integration tests covering the handler's full pipeline through the
+decision step, including the four CloudWatch EMF metrics it emits.
 
-Reuses the mock-MCP pattern from `test_handler_writes_history.py`. Each
-test asserts on the metrics emitted by the handler (via powertools'
-serialize_metric_set, since the handler calls `flush_metrics()` at the
-end which clears state — we install a hook to capture the EMF before
-flush).
+Reuses the mock-MCP pattern from `test_handler_writes_history.py`. The
+handler calls `flush_metrics()` at the end of every poll (which clears
+state), so we install a hook to capture the EMF blob before flush and
+assert directly on it via powertools' serialize_metric_set.
 """
 
 import json

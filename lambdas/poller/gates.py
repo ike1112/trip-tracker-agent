@@ -8,7 +8,7 @@ Three boolean gates (per design-spec §5):
     means "never alerted" → eligible.
 
   * `passes_threshold(snapshot, watch)`: simple budget gate — strict `<` of
-    `maxTotalPrice` (locked decision in tasks/slice-5-poller.plan.md §7).
+    `maxTotalPrice`. A total equal to the budget does not trip the gate.
 
   * `is_anomaly(snapshot, history)`: catches "user-set threshold was too
     high" cases. True iff:
@@ -59,11 +59,11 @@ def is_dedup_eligible(snapshot: dict, watch: dict) -> bool:
 def passes_threshold(snapshot: dict, watch: dict) -> bool:
     """Strict `<`: a total at exactly `maxTotalPrice` does NOT pass.
 
-    Caller guarantees `watch["maxTotalPrice"]` is set — `add_watch` (T2 of
-    slice 2) requires it as a non-optional tool argument. If the field is
-    ever missing in DDB, `KeyError` will surface to the per-watch
-    try/except in app.py and be logged as `watch_errored`, not silently
-    converted to `False`.
+    Caller guarantees `watch["maxTotalPrice"]` is set — `add_watch`
+    requires it as a non-optional tool argument. If the field is ever
+    missing in DDB, `KeyError` will surface to the per-watch try/except
+    in app.py and be logged as `watch_errored`, not silently converted
+    to `False`.
     """
     return _f(snapshot["totalPrice"]) < _f(watch["maxTotalPrice"])
 

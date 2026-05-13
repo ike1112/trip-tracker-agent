@@ -81,9 +81,9 @@ def _set_env():
     os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
     os.environ["WATCHES_TABLE_NAME"] = WATCHES_TABLE
     os.environ["FARE_HISTORY_TABLE_NAME"] = FARE_HISTORY_TABLE
-    # Slice 6: keep tests in stub mode so no test ever burns a real
-    # Bedrock call. test_bedrock_decide.py's per-test fixture flips this
-    # to "live" with a mocked boto3 client when needed.
+    # Keep tests in stub mode so no test ever burns a real Bedrock call.
+    # test_bedrock_decide.py's per-test fixture flips this to "live" with
+    # a mocked boto3 client when needed.
     os.environ.setdefault("BEDROCK_MODE", "stub")
 
 
@@ -216,9 +216,9 @@ def app_module():
     `.records` list collects every log record emitted during the call.
 
     Sets `JWT_SIGNATURE_SECRET` and placeholder MCP endpoints so the
-    handler can construct (T2 onward); tests that need to exercise the
-    MCP code path override the endpoints to point at a real mock server
-    (see `test_handler_with_mcp.py`).
+    handler can construct; tests that need to exercise the MCP code path
+    override the endpoints to point at a real mock server (see
+    `test_handler_with_mcp.py`).
     """
     _set_env()
     os.environ["JWT_SIGNATURE_SECRET"] = "test-secret-aaaaaaaaaaaaaaaaaaaaa"

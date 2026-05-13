@@ -1,8 +1,12 @@
-"""Tests for `bedrock_decide.py` per the T1 test design (test-engineer
-subagent, 2026-05-10). 38 tests across 10 groups; no real Bedrock calls
-ever fire (stub mode + mocked boto3).
+"""Behavioural tests for `bedrock_decide.decide()` — covers mode
+selection at import, prompt construction and determinism, strict
+JSON-only response parsing with the full malformation matrix, prompt-
+injection safety (provider strings restricted to the user role),
+defensive fallback on Bedrock failures, and the `bedrock_called` metric
+contract. No real Bedrock calls fire — stub mode plus mocked boto3
+throughout.
 
-Groups:
+Test groups (referenced by name prefix in this file):
   A: mode selection at import
   B: constant pinning
   C: prompt determinism
@@ -460,6 +464,7 @@ def test_J3_live_mode_failure_bedrock_called_is_true():
     mock_client.invoke_model.side_effect = _make_client_error("ThrottlingException")
     with patch.object(bd, "_get_client", return_value=mock_client):
         result = bd.decide(_snap(), WATCH, [])
-    # The metric must increment even when the call fails — slice 5
-    # established this contract via decision.py's `bedrock_called` field.
+    # The metric must increment even when the call fails — the
+    # `bedrock_called` flag tracks "did we attempt the model layer",
+    # not "did the network call succeed".
     assert result["bedrock_called"] is True

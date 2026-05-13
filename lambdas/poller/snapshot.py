@@ -26,14 +26,12 @@ Design notes:
 
 - **`bestOfferBlob` denormalisation.** Per design-spec §3 we duplicate the
   parts of the MCP response we'll need for the alert email so the
-  Notifier (slice 7) can compose the message without re-querying any
-  provider.
+  Notifier can compose the message without re-querying any provider.
 
 - **`source` field captured.** We don't have provider request IDs at the
   MCP-tool level (only the `source` debug field), so we write `source`
-  into the legacy `duffelRequestId` / `liteApiRequestId` slots until
-  slice 6+ work makes the live client surface real request IDs. Better
-  than empty.
+  into the legacy `duffelRequestId` / `liteApiRequestId` slots until the
+  live MCP clients surface real request IDs. Better than empty.
 
 - **All numeric fields are `Decimal`.** DDB rejects native `float`. Coerce
   via `Decimal(str(value))` so float imprecision never enters the data
@@ -49,8 +47,8 @@ from typing import Any
 
 USD = "USD"
 TTL_DAYS = 90
-# bookingDeepLink lands in DDB and is later embedded in alert emails by the
-# Notifier (slice 7). Bound the field so a misbehaving (or compromised) MCP
+# bookingDeepLink lands in DDB and is later embedded in alert emails by
+# the Notifier. Bound the field so a misbehaving (or compromised) MCP
 # response can't ship a multi-MB string into the time series, and reject
 # any scheme other than https so a `javascript:` payload can't reach a
 # user's mail client.
@@ -132,10 +130,10 @@ def _flight_blob_fields(offer: dict) -> dict:
 def _validate_deep_link(raw: Any) -> str:
     """Reject deep links that aren't HTTPS or are unreasonably long.
 
-    The Notifier (slice 7) will embed this string in alert emails. A
-    `javascript:` URI or an unbounded string from a misbehaving provider
-    must not survive the snapshot. Raises ValueError so the per-watch
-    try/except logs `watch_errored` and skips this poll cleanly.
+    The Notifier will embed this string in alert emails. A `javascript:`
+    URI or an unbounded string from a misbehaving provider must not
+    survive the snapshot. Raises ValueError so the per-watch try/except
+    logs `watch_errored` and skips this poll cleanly.
     """
     if raw is None or raw == "":
         return ""
@@ -169,7 +167,7 @@ def compose_snapshot(
     Build the FareHistory row for one poll of one watch.
 
     Returns None if either side has no qualifying offers — we don't write
-    half-snapshots, and the `decide()` path (slice 5 T4) shouldn't see one.
+    half-snapshots, and `decide()` shouldn't see one.
 
     Raises:
         ValueError: any non-USD offer/hotel made it into the input list.
@@ -214,9 +212,9 @@ def compose_snapshot(
             **_flight_blob_fields(cheapest_flight),
             **_hotel_blob_fields(cheapest_hotel),
         },
-        # slice 6+ replaces these with real provider request IDs once the
-        # live client surfaces them. For slice 5 (fixture-default) the
-        # `source` debug field is the most informative breadcrumb we have.
+        # Request IDs are placeholders until the live MCP clients surface
+        # real ones. Under the fixture-default mode the `source` debug
+        # field is the most informative breadcrumb we have.
         "duffelRequestId": str(flights_payload.get("source", "")),
         "liteApiRequestId": str(hotels_payload.get("source", "")),
         "ttl": ttl,

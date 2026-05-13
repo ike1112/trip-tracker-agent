@@ -1,8 +1,8 @@
 """
 Bedrock Haiku 4.5 wrapper for the trip-tracker poller's alert decision.
 
-Slice 6 swaps the slice-5 stub in `decision.py` for a real model call. This
-module owns:
+Owns the Bedrock InvokeModel call used by `decision.decide()` when the
+gate cascade passes:
   - Prompt construction (system + user messages)
   - Bedrock InvokeModel call (boto3 bedrock-runtime client)
   - Strict JSON-only response parsing
@@ -195,9 +195,10 @@ def decide(snapshot: dict, watch: dict, history: list[dict]) -> dict:
     """Decide whether `snapshot` for `watch` is alert-worthy.
 
     Always returns `{"alert": bool, "reason": str, "bedrock_called": bool}`.
-    `bedrock_called` is True for both stub and live modes — it tracks the
-    metric semantics from slice 5 (the cascade reached the model layer),
-    not whether a real network call happened.
+    `bedrock_called` is True for both stub and live modes — it tracks
+    whether the gate cascade reached the model layer, not whether a real
+    network call happened. This is what `bedrock_decisions_made` counts
+    in app.py.
     """
     if BEDROCK_MODE == _MODE_STUB:
         return {"alert": True, "reason": "stub", "bedrock_called": True}

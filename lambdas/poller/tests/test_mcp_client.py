@@ -10,8 +10,8 @@ The mock server lives only for the duration of one test and is torn down
 in `finally`.
 
 Authentication isn't tested at the HTTP level here — the mock doesn't run
-the real authorizer. `test_jwt_signer.py` covers the token contract; the
-T2 integration test (`test_handler_with_mcp.py`) covers the wiring end-to-end.
+the real authorizer. `test_jwt_signer.py` covers the token contract;
+`test_handler_with_mcp.py` covers the JWT-over-HTTP wiring end-to-end.
 """
 
 import json

@@ -6,14 +6,14 @@ Routing (design-spec §5):
      immediately (anti-spam; running Bedrock here is wasted cost).
   2. Threshold OR anomaly — if either passes, the candidate is worth the
      model's attention. Delegates to `bedrock_decide.decide`, which
-     returns the final `{alert, reason, bedrock_called: True}`. In slice 5
-     that module was a local stub; in slice 6 it's a real Bedrock Haiku
-     4.5 call selected by the `BEDROCK_MODE` env var (ADR 0004).
+     returns the final `{alert, reason, bedrock_called: True}`. Stub vs
+     live (real Bedrock Haiku 4.5) is selected by the `BEDROCK_MODE`
+     env var; see ADR 0004.
   3. Otherwise — no alert; reason names the missing condition.
 
-The return shape `{alert, reason, bedrock_called}` is the slice-7
-Notifier's contract — `reason` is templated into the alert email so the
-user understands *why* the alert fired (design-spec §5 motivation).
+The return shape `{alert, reason, bedrock_called}` is the Notifier's
+contract — `reason` is templated into the alert email so the user
+understands *why* the alert fired (design-spec §5 motivation).
 """
 
 from __future__ import annotations

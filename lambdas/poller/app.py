@@ -1,21 +1,16 @@
 """
 Lambda entrypoint for the trip-tracker poller.
 
-Slice 5 progress (per `tasks/slice-5-poller.plan.md`):
-  ✅ T1: walking skeleton — enumerate active watches and log each.
-  ✅ T2: per-watch MCP calls (flights + hotels) with internal JWT auth.
-  ✅ T3: snapshot composer + FareHistory writer per watch.
-  ✅ T4: gates + decision stub + CloudWatch metrics.
-  ⏭ T5: EventBridge enable + ADR 0003 + threat model + e2e.
+Walks every active watch sequentially per ADR 0003: enumerate the
+Watches table, call flights-mcp + hotels-mcp under a per-user JWT,
+compose and persist a FareHistory snapshot, then run the alert gates
+and (when warranted) the Bedrock decision. A failure on one watch logs
+and continues so a single misbehaving provider response can't starve
+the rest of the poll.
 
-The handler runs sequentially per ADR 0003 — one watch at a time, one MCP
-at a time. A failure on one watch logs and skips; the loop continues with
-the next. This keeps a single misbehaving provider response from starving
-all the other watches in the same poll.
-
-Triggered by EventBridge (slice 5 T5) — the `event` payload is empty / a
-schedule envelope, never user input. The poller does not parse user input
-from `event` and never trusts it.
+Triggered by EventBridge on a cron — the `event` payload is a schedule
+envelope, never user input. The poller does not parse anything out of
+`event` and never trusts it.
 """
 
 import os
@@ -74,9 +69,10 @@ def _poll_one(watch: dict) -> None:
     `snapshot_skipped`, not a `watch_errored`.
 
     Raises:
-        McpCallError: on any MCP provider/transport failure (T2).
-        ValueError: snapshot composer found a non-USD currency (T3).
-        KeyError:    malformed Duffel-shaped offer (missing slices/segments).
+        McpCallError: on any MCP provider/transport failure.
+        ValueError:   snapshot composer found a non-USD currency or
+                      rejected an unsafe deep link.
+        KeyError:     malformed Duffel-shaped offer (missing slices/segments).
         The caller catches all three and logs `watch_errored`, per ADR 0003.
     """
     user_id = watch["userId"]
@@ -132,7 +128,7 @@ def _poll_one(watch: dict) -> None:
         },
     )
 
-    # T3: compose + write the FareHistory snapshot. compose_snapshot()
+    # Compose + write the FareHistory snapshot. compose_snapshot()
     # returns None when either side has no qualifying offers — log it as
     # a soft skip and stop here (no decision to make).
     snapshot = compose_snapshot(watch, flights_payload, hotels_payload)
@@ -142,7 +138,7 @@ def _poll_one(watch: dict) -> None:
             extra={**log_extra, "reason": "no_qualifying_offers"},
         )
         return
-    # T4: pull the 30-day anomaly window BEFORE writing the new row. With
+    # Pull the 30-day anomaly window BEFORE writing the new row. With
     # `cutoff = now - 30d` and the just-composed snapshot's timestamp =
     # `now`, the new row's timestamp is strictly > cutoff. So when the
     # subsequent query runs `timestamp > cutoff`, the boundary is "rows
@@ -165,10 +161,10 @@ def _poll_one(watch: dict) -> None:
 
     decision = decide(snapshot, watch, history)
     # `bedrock_decisions_made` reflects actual model invocations — only
-    # increment when the gate cascade would have called Bedrock (i.e.,
-    # passed the dedup gate AND at least one of threshold/anomaly).
-    # Slice 6's real Bedrock call sits behind the same flag, so the
-    # metric semantics stay accurate when the stub is replaced.
+    # increment when the gate cascade reached the model layer (i.e.,
+    # passed the dedup gate AND at least one of threshold/anomaly). The
+    # `bedrock_called` flag is set by `decision.decide` regardless of
+    # stub vs live mode so this metric stays accurate either way.
     if decision.get("bedrock_called"):
         metrics.increment(metrics.BEDROCK_DECISIONS_MADE)
     logger.info(
@@ -189,8 +185,8 @@ def handler(event: dict, context: LambdaContext) -> dict:
     Per-invocation entrypoint. Walks every active watch sequentially.
 
     Returns a small status dict for CloudWatch / manual invocation; the
-    real "did anything happen" signal is the structured logs + (T4) the
-    CloudWatch EMF metrics.
+    real "did anything happen" signal is the structured logs plus the
+    CloudWatch EMF metrics flushed at the end of the poll.
     """
     _require_endpoints()
     polled = 0
@@ -209,10 +205,10 @@ def handler(event: dict, context: LambdaContext) -> dict:
         try:
             _poll_one(watch)
         except (McpCallError, ValueError, KeyError) as e:
-            # McpCallError: transport / HTTP / envelope failures (T2).
-            # ValueError: snapshot composer rejects non-USD currency or
-            #             unsafe deep link (T3).
-            # KeyError:   malformed offer (missing slices/segments) (T3).
+            # McpCallError: transport / HTTP / envelope failures.
+            # ValueError:   snapshot composer rejects non-USD currency or
+            #               unsafe deep link.
+            # KeyError:     malformed offer (missing slices/segments).
             # All of these are "this watch couldn't be processed; skip
             # and continue with the next" per ADR 0003.
             errored += 1

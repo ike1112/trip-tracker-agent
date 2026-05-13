@@ -1,6 +1,8 @@
-"""Boundary-tested unit tests for `gates.py` — 20 cases per the T4 design.
+"""Boundary-tested unit tests for `gates.py`.
 
-Each test exercises a specific input → output mapping. Constants are read
+Each test exercises a specific input → output mapping at and around the
+gate thresholds (strict-< boundaries on dedup and threshold, ≤ vs <
+semantics on the anomaly median/min branches). Constants are read
 directly from `gates` (e.g. `gates.DEDUP_DISCOUNT`) so a tuning change
 that doesn't update the test file's intent is caught immediately.
 """

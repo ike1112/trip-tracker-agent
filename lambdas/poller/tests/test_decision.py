@@ -1,7 +1,9 @@
-"""Tests for `decision.decide` — gate routing in the slice-5 stub.
+"""Tests for `decision.decide` — gate routing under BEDROCK_MODE=stub.
 
-Slice 6 will replace the body with a Bedrock call; these tests pin the
-routing logic so swapping implementations doesn't silently break it.
+These tests pin the dedup → (threshold OR anomaly) → model-delegate
+flow and the `bedrock_called` metric contract so that swapping the
+stub for a real Bedrock call (or back) cannot silently break the
+routing or skew `bedrock_decisions_made`.
 """
 
 from decimal import Decimal
@@ -48,8 +50,8 @@ def test_alert_false_when_dedup_blocks_even_if_threshold_would_pass():
     )
     assert result["alert"] is False
     assert result["reason"] == "dedup_blocked"
-    # Critical for slice-6 metric correctness: dedup-blocked watches
-    # must NOT count as Bedrock invocations.
+    # Critical for metric correctness: dedup-blocked watches must NOT
+    # count as Bedrock invocations.
     assert result["bedrock_called"] is False
 
 

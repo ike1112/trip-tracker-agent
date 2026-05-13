@@ -3,7 +3,7 @@
 Powertools' `Metrics.serialize_metric_set()` returns the EMF dict the
 Lambda runtime would write to stdout. We assert directly on that dict
 so the tests don't depend on capturing stdout (which has the powertools
-binding-at-import quirk we wrestled with in T1's handler tests).
+binding-at-import quirk the handler tests had to work around).
 """
 
 import importlib

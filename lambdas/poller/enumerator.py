@@ -3,9 +3,9 @@ Watch enumeration for the trip-tracker poller.
 
 The Watches table is partitioned by `userId`, so polling all users requires a
 `Scan` with a `FilterExpression` on `status = "active"`. This is acceptable
-at personal scale (≤dozens of items, see `lib/data-stores.js` and
-production-readiness companion §2 row 1). When watch counts grow, ADR 0007
-(planned, slice 9) covers adding a status GSI so this becomes a `Query`.
+at personal scale (≤dozens of items, see `lib/data-stores.js`). When watch
+counts grow, ADR 0007 (planned) covers adding a status GSI so this
+becomes a `Query`.
 
 The function below pages through Scan results — DynamoDB caps each page at
 1MB regardless of `FilterExpression`, so any deployment with more than a

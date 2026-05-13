@@ -1,15 +1,15 @@
-"""End-to-end test for slice 5 — full poll cycle through every layer.
+"""End-to-end poll-cycle test exercising every layer in one handler
+invocation:
 
-Exercises in one handler invocation:
-  - DDB Watches enumeration (T1) with mixed active / paused
-  - JWT signing per watch (T2)
-  - Live HTTPS calls to mock MCPs that re-verify the JWT (T2)
-  - Snapshot composition + FareHistory write (T3)
-  - 30-day history Query (T4) with pre-existing rows from DDB
-  - Gate routing + decision stub + four EMF metrics (T4)
+  - DDB Watches enumeration with mixed active / paused / archived rows
+  - JWT signing per watch
+  - Live HTTPS calls to mock MCPs that re-verify the JWT
+  - Snapshot composition + FareHistory write
+  - 30-day history Query with pre-existing rows from DDB
+  - Gate routing + decision delegate + four EMF metrics
 
-Then asserts on:
-  - FareHistory rows materialised (one per active, none per inactive)
+Asserts on:
+  - FareHistory rows materialised (one per active watch, none per inactive)
   - All four metrics emitted with the right counts
   - Per-watch logs have the structured fields the production-readiness
     companion §3.2 commits to (`watch_id`, `user_id_prefix`, decision
@@ -17,7 +17,7 @@ Then asserts on:
   - `dedup_blocked` path verified by a watch with `lastAlertedPrice`
     set such that the gate denies the alert
   - `is_anomaly = True` path verified by pre-seeding FareHistory rows
-    that make the new total a 30-day-low
+    that make the new total a 30-day low
 """
 
 import json
@@ -137,7 +137,7 @@ def _hotel_for(_tool, args, _claims):
     }]})
 
 
-def test_full_slice_5_e2e_poll(app_module, monkeypatch):
+def test_full_e2e_poll(app_module, monkeypatch):
     app, watches, fare, log = app_module
 
     # Hook to capture EMF before the handler clears it. Use monkeypatch so
@@ -199,8 +199,8 @@ def test_full_slice_5_e2e_poll(app_module, monkeypatch):
     # = 2. w-noalert (no gate passed) and w-dedup (dedup blocked) don't
     # invoke the model.
     assert _emf_value(emf, "bedrock_decisions_made") == 2
-    # alerts_sent matches bedrock_decisions_made under the slice-5 stub
-    # (which always returns alert=True when called). In slice 6 the real
+    # alerts_sent matches bedrock_decisions_made under stub mode (the
+    # stub always returns alert=True when called). In live mode the real
     # model can return alert=False even when called.
     assert _emf_value(emf, "alerts_sent") == 2
 

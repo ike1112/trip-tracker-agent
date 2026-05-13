@@ -1,12 +1,13 @@
-"""Integration test for the T2 handler — handler walks active watches and
-issues real HTTP calls to mock MCP servers.
+"""Integration test for per-watch MCP wiring — the handler walks active
+watches and issues real HTTP calls to mock MCP servers.
 
 The mock servers run on threads in-process; one for "flights", one for
-"hotels". Each one verifies the JWT in the Authorization header (using the
-same `JWT_SIGNATURE_SECRET` and `sub == "travel-agent"` check that the
-real `mcp-authorizer/index.js` enforces) and returns canned MCP envelopes.
+"hotels". Each one verifies the JWT in the Authorization header (using
+the same `JWT_SIGNATURE_SECRET` and `sub == "travel-agent"` check that
+the real `mcp-authorizer/index.js` enforces) and returns canned MCP
+envelopes.
 
-Asserts that pin down T2 behaviour:
+Asserts that pin down the MCP-call behaviour:
   - 3 active watches → 6 successful MCP calls (3 × 2).
   - The Authorization header on every request is a Bearer JWT signed by
     the poller's `jwt_signer` (verified by decoding it on the mock side).
@@ -138,7 +139,7 @@ def test_handler_calls_both_mcps_for_each_active_watch(app_module, monkeypatch):
     app, watches, _, log = app_module
 
     # Offers carry the full slice/segments shape compose_snapshot needs;
-    # otherwise T3's writer raises KeyError → watch_errored.
+    # otherwise the writer raises KeyError → watch_errored.
     def _flight_offer():
         return {
             "id": "off_1", "totalAmount": "1284.50", "currency": "USD",

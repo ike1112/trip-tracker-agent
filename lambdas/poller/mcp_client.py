@@ -21,7 +21,7 @@ What this module does:
 Date math: the watch's `dateWindow.earliestDepart` + `nights` becomes
 `departDate` and `returnDate` for flights, `checkin` and `checkout` for
 hotels. The flexible-window sweep ("cheapest day in the window") is
-deferred to v1.5; documented in `tasks/slice-5-poller.plan.md` §2.5.
+deferred to v1.5.
 """
 
 from __future__ import annotations
@@ -211,9 +211,9 @@ def derive_dates(date_window: dict) -> tuple[str, str]:
     """
     Pick the (depart, return) date pair the poller searches for.
 
-    For slice 5 we use `earliestDepart` as the depart date and add `nights`
-    days for the return date. The flexible-window sweep is deferred to
-    v1.5 — see `tasks/slice-5-poller.plan.md` §2.5.
+    Uses `earliestDepart` as the depart date and adds `nights` days for
+    the return date. The flexible-window sweep ("cheapest day in the
+    window") is deferred to v1.5.
 
     Returns a `(YYYY-MM-DD, YYYY-MM-DD)` tuple.
     """

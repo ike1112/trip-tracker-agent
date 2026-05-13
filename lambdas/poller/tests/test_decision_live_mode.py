@@ -1,11 +1,11 @@
 """Integration tests for `decision.py` in live mode (mocked Bedrock).
 
-Slice 5's `test_decide_does_not_call_bedrock_in_slice5` confirmed the
-stub never reaches boto3. This file is the slice-6 complement: confirm
-that when `BEDROCK_MODE=live`, `decision.decide` actually delegates to
-`bedrock_decide.decide` and the real boto3 client gets invoked. Gates
-that should short-circuit (dedup-blocked, no-gate-passed) MUST NOT
-reach boto3.
+Companion to `test_decision.py`'s stub-mode coverage. Confirms that
+when `BEDROCK_MODE=live` the cascade actually delegates to
+`bedrock_decide.decide` (and the boto3 client gets invoked), while
+short-circuit paths (dedup-blocked, no-gate-passed) still MUST NOT
+reach boto3 — otherwise the operator pays for decisions Bedrock
+would have ignored.
 """
 
 import importlib

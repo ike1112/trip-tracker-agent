@@ -35,5 +35,5 @@ async function handler({ origin, destination, departDate, returnDate, pax, maxSt
 
 // Renamed from `search_offers` to disambiguate from the hotels-mcp tool of the
 // same shape — the agent merges both servers' tool lists into one toolbox, so
-// the names must be globally unique. (slice 4)
+// the names must be globally unique.
 export default ['search_flight_offers', description, schema, handler];

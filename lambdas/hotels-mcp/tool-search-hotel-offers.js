@@ -32,5 +32,5 @@ async function handler({ city, checkin, checkout, pax, minStars }) {
     };
 }
 
-// Globally-unique tool name — see ADR 0002 + slice 4 commit message.
+// Globally-unique tool name — see ADR 0002.
 export default ['search_hotel_offers', description, schema, handler];

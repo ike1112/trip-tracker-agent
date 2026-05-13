@@ -42,10 +42,10 @@ from aws_lambda_powertools import Logger
 jwt_signature_secret = os.environ['JWT_SIGNATURE_SECRET']
 
 # Endpoints for each MCP server the agent talks to. All values are
-# injected by CDK at deploy time. Slice 3 added flights; slice 4 added
-# hotels; the bookings endpoint stays until slice 8 cleanup. Empty /
-# unset endpoints are tolerated so the agent still boots if a server is
-# mid-deploy or intentionally disabled in this environment.
+# injected by CDK at deploy time. The `bookings` endpoint is legacy and
+# slated for removal; flights + hotels are the current providers. Empty
+# or unset endpoints are tolerated so the agent still boots if a server
+# is mid-deploy or intentionally disabled in this environment.
 _mcp_endpoints = [
     ("bookings", os.getenv("MCP_ENDPOINT")),
     ("flights",  os.getenv("FLIGHTS_MCP_ENDPOINT")),
