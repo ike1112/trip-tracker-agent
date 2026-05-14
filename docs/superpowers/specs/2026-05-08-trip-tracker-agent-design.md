@@ -50,7 +50,6 @@ Not a Booking.com replacement. Not a public service. Not a multi-user product (t
 - Local tools added to the Travel Agent Lambda for watch CRUD
 
 ### What's removed
-- The stub `bookings-mcp` (replaced by `flights-mcp` + `hotels-mcp`)
 - The travel-domain stub data and the demo "agent-to-agent" flow if not used
 
 ### High-level diagram

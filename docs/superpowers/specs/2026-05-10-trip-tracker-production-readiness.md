@@ -43,7 +43,7 @@ Approach A′ — production-readiness baked into each feature slice; one final 
 | 5 | Poller Lambda | Reads active watches, calls both MCPs, writes FareHistory, gate logic (design-spec §5); Bedrock decision stubbed `{alert: True, reason: "stub"}` | Sequential loop (ADR 0003); per-watch structured logs with `watch_id`/`user_id` fields; X-Ray; CloudWatch metric emission (`watches_polled`, `watches_errored`, `alerts_sent`, `bedrock_decisions_made`) |
 | 6 | Bedrock decision | Real Haiku 4.5 call returning `{alert, reason}` | Eval golden set v1 (decision-quality fixtures + judge rubric); eval runner script `evals/run_evals.py`; sample report committed; ADR 0004 (why route through Bedrock for the decision at all) |
 | 7 | Notifier + SES | Templated email with reason; `lastAlertedAt`/`lastAlertedPrice` writeback after SES success | After-SES idempotency (ADR 0005); markdown-safe email template; CloudWatch alarm on Notifier errors |
-| 8 | Cleanup | Delete `bookings-mcp` and its CDK construct | Migration commit comment; CloudWatch dashboard JSON in `infra/dashboards/` for the 4 metrics from slice 5 |
+| 8 | Cleanup | Delete the legacy stub MCP scaffold and its CDK construct | Migration commit comment; CloudWatch dashboard JSON in `infra/dashboards/` for the 4 metrics from slice 5 |
 | 9 | Polish (new) | (no feature code) | CI workflow `.github/workflows/ci.yml` (lint, `cdk synth`, `cfn-lint`, unit tests in fixture mode); `.env.example`; README rewritten per §4.6; ADR index `docs/adr/README.md`; threat model `docs/threat-model.md`; AWS Budget alarm (CDK); architecture PNG export; Loom outline `docs/demo-script.md`; LICENSE; GitHub repo description + topics |
 
 ---
@@ -201,7 +201,7 @@ Extends design-spec §9. Completion targets each item to the slice that closes i
 - [x] (slice 5) Poller Lambda + EventBridge + structured logs + X-Ray on all Lambdas + CloudWatch metrics + ADR 0003
 - [x] (slice 6) Bedrock decision + eval baseline report committed (`evals/results/`) + ADR 0004
 - [x] (slice 7) Notifier + SES + ADR 0005 + markdown-safe email template
-- [ ] (slice 8) `bookings-mcp` removed + CloudWatch dashboard committed
+- [x] (slice 8) legacy stub MCP scaffold removed + CloudWatch dashboard committed
 - [ ] (slice 9) CI green + README rewritten + ADR 0006/0007 written + threat model committed + LICENSE + `.env.example` + Loom recorded + AWS Budget alarm deployed
 - [ ] (post-launch, design-spec §9) One real watch active for 7 days before declaring done
 

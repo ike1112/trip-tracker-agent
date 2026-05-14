@@ -4,29 +4,31 @@ Deliberately splits tools into two categories:
 1) Local tools (tools.py) — simple, stateless utilities baked into the agent
    Lambda itself (e.g. get today's date, look up a user's location).
 
-2) MCP tools (this module) — richer, domain-specific capabilities served by a
-   separate Lambda (bookings-mcp). Examples: check available cars, book hotels,
-   retrieve travel policies.
+2) MCP tools (this module) — richer, domain-specific capabilities served by
+   separate Lambdas. Two MCP servers are wired in: `flights-mcp` (Duffel-backed
+   flight search) and `hotels-mcp` (LiteAPI-backed hotel search). Each runs
+   as its own Lambda + API Gateway + JWT authorizer.
 
 The MCP split is a real architectural decision:
 
 - Separation of concerns: the agent Lambda owns reasoning and orchestration;
-  the MCP server owns booking business logic. Each can be deployed, scaled,
-  and updated independently without touching the other.
+  each MCP server owns one domain's API integration. Each can be deployed,
+  scaled, and updated independently without touching the others.
 
 - Security boundary: every MCP call carries a user-scoped JWT signed here with
-  a shared secret (JWT_SIGNATURE_SECRET). The MCP server validates that JWT
-  before executing any tool. This means even if someone could call the MCP
-  server directly, they would still need a valid signed token.
+  a shared secret (JWT_SIGNATURE_SECRET). Each MCP server's authorizer Lambda
+  validates that JWT before invoking the tool handler. This means even if
+  someone could call an MCP server directly, they would still need a valid
+  signed token.
 
-- Tool discovery at runtime: the agent calls list_tools_sync() to learn what
-  the MCP server currently offers. This means new booking tools can be added
-  to the MCP server and the agent picks them up automatically—no agent
-  redeployment needed.
+- Tool discovery at runtime: the agent calls list_tools_sync() against each
+  configured endpoint and merges the results. New tools added on any MCP
+  server are picked up automatically — no agent redeployment needed.
 
-- Reusability: any other agent or service that needs booking capabilities can
-  connect to the same MCP server with its own signed token, without duplicating
-  the business logic.
+- Tolerance for partial outages: the endpoint loop catches per-endpoint
+  failures so a single MCP server being down (or intentionally disabled
+  via an empty env var) degrades only that one tool surface rather than
+  taking the whole turn down.
 """
 
 from user import User
@@ -42,14 +44,12 @@ from aws_lambda_powertools import Logger
 jwt_signature_secret = os.environ['JWT_SIGNATURE_SECRET']
 
 # Endpoints for each MCP server the agent talks to. All values are
-# injected by CDK at deploy time. The `bookings` endpoint is legacy and
-# slated for removal; flights + hotels are the current providers. Empty
-# or unset endpoints are tolerated so the agent still boots if a server
-# is mid-deploy or intentionally disabled in this environment.
+# injected by CDK at deploy time. Empty or unset endpoints are tolerated
+# so the agent still boots if a server is mid-deploy or intentionally
+# disabled in this environment.
 _mcp_endpoints = [
-    ("bookings", os.getenv("MCP_ENDPOINT")),
-    ("flights",  os.getenv("FLIGHTS_MCP_ENDPOINT")),
-    ("hotels",   os.getenv("HOTELS_MCP_ENDPOINT")),
+    ("flights", os.getenv("FLIGHTS_MCP_ENDPOINT")),
+    ("hotels",  os.getenv("HOTELS_MCP_ENDPOINT")),
 ]
 
 l = Logger(service="travel-agent")
