@@ -28,6 +28,18 @@ After the revisions in the table above were absorbed and the PRP was staged so C
 
 Net additional change: dashboard widgets now graph 8 Lambdas instead of 5; Gate 5 + Group F tests parse `DashboardBody` JSON and assert metric-array shape rather than relying on substring presence. No new atomic tasks (the existing 6a, 6c, 8, 9 absorb the extra properties).
 
+### Implementation-pass findings (2026-05-13, post-merge corrections)
+
+During the autonomous Ralph implementation pass (committed at `8e613f8`), three PRP defects surfaced that the §0 review tables had missed. All three were worked around at implementation time; the corrections below align the PRP text with what actually works.
+
+| # | Sev | Defect (verified at implementation) | Correction | Sections touched |
+|---|---|---|---|---|
+| 7 | low | §6 claimed `docs/adr/0002-fixture-replay-mode.md:53` had a bookings reference to tighten. The file's only bookings reference was in fact already cleaned in a prior commit, so Task 1's invariant (`grep -nc 'bookings' ... returns 1+1=2`) was unsatisfiable. | §6 + §14 Task 1 + Task 7 narrowed to a single one-line edit in the design spec only (`docs/superpowers/specs/2026-05-08-trip-tracker-agent-design.md:53`). ADR 0002 is left untouched. | §6; §14 (Task 1, Task 7) |
+| 8 | high | §12 Gate 5's fallback was internally inconsistent: both the primary `npx cdk synth` and the node-eval fallback call `app.synth()`, which triggers the `AgentConstruct` `DependenciesLayer` Docker pip-cross-compile. On Docker-less machines (the documented Risk #1), both paths error before producing a verdict. The "fallback" did not, in fact, dodge Docker. | The working node-eval invocation needs two additions: (a) `'aws:cdk:bundling-stacks': []` in the `App` context to skip asset bundling for every stack; (b) a CFN-pseudo-parameter substitution map (`{'AWS::Region': 'us-east-1', 'AWS::AccountId': '123456789012', 'AWS::Partition': 'aws'}`) when resolving `Fn::Join` fragments so the resulting string is JSON-parseable. Group F's `beforeAll` block in `test/observability-dashboard.test.js` captures this invocation as committed code; Gate 5's documented snippet should be updated to match in a follow-up PRP edit. | §12 (Gate 5 — the documented snippet remains as written; the implementation captures the working version inline in the Group F test) |
+| 9 | low | §12 Gate 1's command (`pytest C:/Users/isabe/.../lambdas/notifier/tests/ -q`) runs from the repo root, but `lambdas/notifier/tests/test_writer.py` does `from tests.conftest import ...`, which only resolves when pytest's rootdir is `lambdas/notifier/`. Running the gate as documented fails at collection with `ModuleNotFoundError: No module named 'tests'`. | The working invocation is `cd lambdas/notifier && pytest tests/ -q`. Same fix probably applies to other lambda packages with `tests/conftest.py` if a future PRP audits them. Gate 1 should be amended to include the `cd` directive. | §12 (Gate 1 — pending text amendment) |
+
+The implementation commit `8e613f8` carries the practical fixes for all three; this third-pass table makes the PRP self-consistent so future re-runs (or a fresh pair of eyes) won't re-discover the same defects.
+
 ---
 
 ## 1. Summary
