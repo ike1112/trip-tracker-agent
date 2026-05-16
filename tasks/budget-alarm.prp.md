@@ -1,12 +1,21 @@
 # PRP: AWS Budget alarm CDK construct
 
-**Confidence:** **9/10** for one-pass execution. Single new L1-resource construct with an exact in-repo precedent (`NotifierServerConstruct` — same `scope.node.tryGetContext` + `EMAIL_PATTERN` synth-validation + named-export shape) and an exact test precedent (`test/notifier-server.test.js`). The only real uncertainties are the CloudFormation serialisation of `budgetLimit.amount` (string `'10'`, not number — pinned in the test matrix) and the deliberate drop of the `sesMode`-style allowlist (no mode flag — Budgets are free/deploy-safe). Both are locked decisions below, not open questions.
+**Confidence:** **9/10** for one-pass execution. Single new L1-resource construct with an exact in-repo precedent (`NotifierServerConstruct` — same `scope.node.tryGetContext` + `EMAIL_PATTERN` synth-validation + named-export shape) and an exact test precedent (`test/notifier-server.test.js`). The one sharp edge (the CloudFormation type of `budgetLimit.amount`) was found by the adversarial pass and inverted: it is the **number `10`**, not a string — §0 #1, verified by direct synth, pinned as numbers throughout. The other deliberate call is dropping the `sesMode`-style allowlist (no mode flag — Budgets are free/deploy-safe). Both are locked decisions below, not open questions.
 
 ---
 
-## 0. Pre-implementation review response (Codex adversarial pass + independent verification)
+## 0. Pre-implementation review response (Codex adversarial pass + direct verification, 2026-05-16)
 
-(Placeholder — populated when the adversarial review runs against this PRP, exactly like `tasks/secrets-and-iam-hardening.prp.md` §0.)
+Codex (read the live repo + the installed `aws-cdk-lib@2.196.0` surface) found 4 defects. The HIGH was verified by **directly synthesising a `CfnBudget`** (stronger than a re-read); #2 is a known environment fact; #3/#4 were grep-verified against the cited lines. All 4 are true and the body below is revised. A separate independent-reviewer subagent was deliberately skipped here (unlike the secrets PRP): every finding is black-and-white and directly verifiable, not a judgement call, and this is a LOW-complexity 4-task PRP — proportionate verification.
+
+| # | Sev | Finding (verified) | Resolution | Sections |
+|---|-----|--------------------|------------|----------|
+| 1 | **HIGH** | The "gotcha" was **backwards**. `CfnBudget.SpendProperty.amount` is typed `number` (`node_modules/aws-cdk-lib/aws-budgets/lib/budgets.generated.d.ts:297`) and CDK's `numberToCloudFormation` is identity. Direct synth confirms `BudgetLimit.Amount` is the **number `10`** (`typeof === 'number'`), and `Threshold` is the **number `80`/`100`**, NOT strings. The PRP asserted string `'10'` in §6/§11/Gate 5/Task 3 — every Group B test + Gate 5 would have failed. | Assert **number** `10` and number thresholds everywhere. The "string serialisation" gotcha is deleted and inverted into an explicit "Amount/Threshold are numbers — do NOT quote them" note. | §1; §6; §11 B2/B3; §12 Gate 5; §14 Task 3; §15 |
+| 2 | MED | Gate 5 used Bash env-assignment (`DUFFEL_API_KEY=stub … node -e`); the documented environment is PowerShell, and the existing full-stack jest tests set env in JS (`test/agent-bedrock-iam.test.js:15-18`) precisely to be shell-agnostic. | Gate 5 sets `process.env.DUFFEL_API_KEY/LITEAPI_API_KEY` **inside** the `node -e` before requiring the stack — no shell-specific env syntax. | §12 Gate 5 |
+| 3 | LOW | Task 4 only flipped boundary [6]. Other budget refs would be left stale/contradictory: `docs/threat-model.md:188` "(planned, slice 9)", `:197` "AWS Budget alarm at $10/mo **with SNS topic email subscription** (slice 9)" — SNS is explicitly NOT built (§10) AND `slice 9` is a roadmap-label rule violation; `:243` "(deferred)". | Task 4 updates **all three** (188/197/243): drop "planned"/"deferred"/"slice 9"/"SNS topic", make them backward references to "AWS Budgets email subscriber (design-spec §300; commit <sha>)". | §14 Task 4 |
+| 4 | LOW | Companion §5 line 205 says "AWS Budget alarm **deployed**". This PRP builds the CDK construct + tests but deploys nothing; rewording that sub-clause to "built" makes the checklist semantically inconsistent (and the whole `[ ]` line also still has CI/README/Loom/ADR-0007 unbuilt). | Task 4 does **NOT** touch companion §5. The line stays `[ ]` and "deployed" stays accurate-as-pending until a real deploy + the other sub-items land. | §14 Task 4 |
+
+Net: no logic/architecture change — the construct shape is unaffected. The corrections are: assert numbers not strings, env-agnostic Gate 5, broader + rule-compliant threat-model edit, and do not touch the companion checklist. Confidence holds at 9/10 (the one sharp edge was found and inverted before implementation).
 
 ---
 
@@ -96,7 +105,7 @@ when the month is forecast to exceed $10.
 | Source | Section | Why |
 |---|---|---|
 | [aws-cdk-lib v2.196 aws-budgets CfnBudget](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_budgets.CfnBudget.html) | `budget` (BudgetDataProperty) + `notificationsWithSubscribers` | L1 prop shape: `budgetType`, `timeUnit`, `budgetLimit.{amount,unit}`, `notificationsWithSubscribers[].{notification,subscribers}` |
-| [AWS::Budgets::Budget CFN ref](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-budgets-budget.html) | BudgetData / Notification / Subscriber | **GOTCHA:** CloudFormation serialises `BudgetLimit.Amount` as a STRING (`"10"`), not a number, even though the CDK L1 prop accepts a JS number `10`. The test must assert `Amount: '10'`. |
+| [AWS::Budgets::Budget CFN ref](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-budgets-budget.html) | BudgetData / Notification / Subscriber | **GOTCHA (verified by synth, §0 #1):** `CfnBudget.SpendProperty.amount` is typed `number` and CDK's `numberToCloudFormation` is identity, so the synthesised `BudgetLimit.Amount` is the **JS number `10`** (`typeof === 'number'`), and `Notification.Threshold` is the **number `80`/`100`**. Tests/Gate MUST assert numbers — do NOT quote them as `'10'`/`'80'`. |
 
 ## 7. Patterns to mirror
 
@@ -163,7 +172,7 @@ function build(budgetEmail, recipientEmail) {
 |---|---|---|
 | `lib/budget-alarm.js` | CREATE | `BudgetAlarmConstruct`: reads `budgetAlarmEmail` ?? `notifierRecipientEmail` from context, `EMAIL_PATTERN` synth-validation (copied from notifier), one `CfnBudget` (COST/MONTHLY/$10) with 80% ACTUAL + 100% FORECASTED EMAIL notifications. JSDoc design-notes block in the notifier's style. Named export. |
 | `lib/strands-agent-on-lambda-stack.js` | UPDATE | Add `const { BudgetAlarmConstruct } = require('./budget-alarm');` with the other requires; instantiate `new BudgetAlarmConstruct(this, 'BudgetAlarmConstruct');` alongside the other constructs (no props — it reads context itself, depends on nothing). |
-| `test/budget-alarm.test.js` | CREATE | Synth-time-validation jest tests in the `notifier-server.test.js` shape: accepted/rejected email shapes, fallback-to-notifier-recipient, blank/malformed throws, AND template-shape assertions on the synthesised `AWS::Budgets::Budget` (exactly 1 resource; `BudgetLimit {Amount:'10',Unit:'USD'}`; `TimeUnit:'MONTHLY'`; `BudgetType:'COST'`; two notifications with the expected `Threshold`/`NotificationType`/`ComparisonOperator` + EMAIL subscriber address). |
+| `test/budget-alarm.test.js` | CREATE | Synth-time-validation jest tests in the `notifier-server.test.js` shape: accepted/rejected email shapes, fallback-to-notifier-recipient, blank/malformed throws, AND template-shape assertions on the synthesised `AWS::Budgets::Budget` (exactly 1 resource; `BudgetLimit {Amount:10,Unit:'USD'}` — numeric `10`; `TimeUnit:'MONTHLY'`; `BudgetType:'COST'`; two notifications with the expected numeric `Threshold` + `NotificationType`/`ComparisonOperator` + EMAIL subscriber address). |
 
 ## 9. Locked decisions
 
@@ -194,8 +203,8 @@ function build(budgetEmail, recipientEmail) {
 
 ### Group B — synthesised budget shape (jest, same file, `Template.fromStack`)
 - `test_B1_exactly_one_budgets_budget_resource`
-- `test_B2_budget_is_COST_MONTHLY_limit_10_USD` (assert `BudgetType:'COST'`, `TimeUnit:'MONTHLY'`, `BudgetLimit:{Amount:'10',Unit:'USD'}` — Amount is the STRING `'10'`, see §6 gotcha)
-- `test_B3_has_80pct_ACTUAL_and_100pct_FORECASTED_notifications` (assert both `Notification` blocks: `NotificationType`, `Threshold`, `ComparisonOperator: 'GREATER_THAN'`, `ThresholdType: 'PERCENTAGE'`)
+- `test_B2_budget_is_COST_MONTHLY_limit_10_USD` (assert `BudgetType:'COST'`, `TimeUnit:'MONTHLY'`, `BudgetLimit:{Amount:10,Unit:'USD'}` — Amount is the **number** `10`, see §6 gotcha; quoting it as `'10'` fails)
+- `test_B3_has_80pct_ACTUAL_and_100pct_FORECASTED_notifications` (assert both `Notification` blocks: `NotificationType`, `Threshold` as the **number** `80`/`100` (not `'80'`), `ComparisonOperator: 'GREATER_THAN'`, `ThresholdType: 'PERCENTAGE'`)
 - `test_B4_both_notifications_have_one_EMAIL_subscriber_with_the_resolved_address`
 - `test_B5_budgetName_is_trip_tracker_monthly_cost`
 
@@ -233,8 +242,11 @@ rg -n --no-heading -w 'basically|simply|obviously|essentially|clearly|merely|kin
 EXPECT: zero matches in both (`.slice(` JS-method false positives are not applicable here — no such call in this construct).
 
 ### Gate 5 — Full-stack synth + budget-shape assertion (Docker-skipping node-eval, per `project_cdk_test_invocation_gotchas`)
+
+Env is set INSIDE the eval (no shell-specific `VAR=…` prefix — §0 #2), so it runs identically under Bash or PowerShell:
 ```
-DUFFEL_API_KEY=stub LITEAPI_API_KEY=stub node -e "
+node -e "
+  process.env.DUFFEL_API_KEY='stub'; process.env.LITEAPI_API_KEY='stub';
   const { App } = require('aws-cdk-lib');
   const { StrandsAgentOnLambdaStack } = require('./lib/strands-agent-on-lambda-stack');
   const app = new App({ context: {
@@ -248,15 +260,17 @@ DUFFEL_API_KEY=stub LITEAPI_API_KEY=stub node -e "
   if (b.length !== 1) { console.error('expected 1 budget, got', b.length); process.exit(1); }
   const bd = b[0].Properties.Budget;
   if (bd.BudgetType !== 'COST' || bd.TimeUnit !== 'MONTHLY') { console.error('wrong budget type/unit'); process.exit(1); }
-  if (bd.BudgetLimit.Amount !== '10' || bd.BudgetLimit.Unit !== 'USD') { console.error('wrong limit', JSON.stringify(bd.BudgetLimit)); process.exit(1); }
+  if (bd.BudgetLimit.Amount !== 10 || bd.BudgetLimit.Unit !== 'USD') { console.error('wrong limit', JSON.stringify(bd.BudgetLimit)); process.exit(1); }
   const ns = b[0].Properties.NotificationsWithSubscribers || [];
   if (ns.length !== 2) { console.error('expected 2 notifications, got', ns.length); process.exit(1); }
+  const thr = ns.map(n => n.Notification.Threshold).sort((a,c)=>a-c);
+  if (thr[0] !== 80 || thr[1] !== 100) { console.error('wrong thresholds', thr); process.exit(1); }
   const addrs = ns.flatMap(n => n.Subscribers.map(s => s.Address));
   if (!addrs.every(a => a === 'me@example.com')) { console.error('subscriber addr wrong', addrs); process.exit(1); }
-  console.log('GATE5 ok: 1 budget, COST/MONTHLY/\$10 USD, 80+100 notifications, email me@example.com');
+  console.log('GATE5 ok: 1 budget, COST/MONTHLY/10 USD (number), 80+100 numeric thresholds, email me@example.com');
 "
 ```
-EXPECT: the `GATE5 ok: …` line. (Resolves the §6 gotcha — `Amount` is asserted as the string `'10'`.)
+EXPECT: the `GATE5 ok: …` line. `Amount` and `Threshold` are asserted as **numbers** (`!== 10`, `!== 80`), per §0 #1.
 
 ### Gate 6 — Notifier + poller regression (pure)
 ```
@@ -287,19 +301,24 @@ EXPECT: notifier 126 passing; poller + evals 312 passing. (This construct touche
 - **VALIDATE**: Gate 2.
 
 ### Task 3: CREATE `test/budget-alarm.test.js`
-- **ACTION**: Jest, mirroring `test/notifier-server.test.js`. `build(budgetEmail, recipientEmail)` thunk per §7. Group A (email accept/reject/fallback/override/neither) using `describe` + `test.each`. Group B using `const { Template } = require('aws-cdk-lib/assertions'); Template.fromStack(stack)` → `resourceCountIs('AWS::Budgets::Budget', 1)` + `hasResourceProperties` for the COST/MONTHLY/`Amount:'10'`/notifications/subscriber shape. Group C: instantiate `StrandsAgentOnLambdaStack` with the Docker-skip context and assert exactly one budget of the right shape.
-- **GOTCHA**: `BudgetLimit.Amount` synthesises as the STRING `'10'` (CFN serialisation), not number `10` — assert `'10'`. `Template.hasResourceProperties` does a partial/subset match, so the notification array assertion should use `Match.arrayWith`/`Match.objectLike` (import `Match` from `aws-cdk-lib/assertions`) to avoid over-pinning ordering.
+- **ACTION**: Jest, mirroring `test/notifier-server.test.js`. `build(budgetEmail, recipientEmail)` thunk per §7. Group A (email accept/reject/fallback/override/neither) using `describe` + `test.each`. Group B using `const { Template, Match } = require('aws-cdk-lib/assertions'); Template.fromStack(stack)` → `resourceCountIs('AWS::Budgets::Budget', 1)` + `hasResourceProperties` for the COST/MONTHLY/`Amount:10`/notifications/subscriber shape. Group C: instantiate `StrandsAgentOnLambdaStack` with the Docker-skip context and assert exactly one budget of the right shape.
+- **GOTCHA (§0 #1, verified by synth)**: `BudgetLimit.Amount` is the **number** `10` and `Notification.Threshold` the **number** `80`/`100` — assert `Amount: 10` / `Threshold: 80`, NOT quoted strings. `Template.hasResourceProperties` is a partial/subset match, so use `Match.arrayWith`/`Match.objectLike` (import `Match` from `aws-cdk-lib/assertions`) for the notification array to avoid over-pinning ordering.
 - **VALIDATE**: Gate 3.
 
-### Task 4: Tick the checklist + ADR/threat-model touchpoints (docs)
-- **ACTION**: This construct closes design-spec §300 + companion §5 slice-9's "AWS Budget alarm deployed" sub-item. Update the companion spec §5 line's budget clause to reflect it is built (leave the line's other unbuilt sub-items — README/Loom — as-is; do NOT tick the whole `[ ]` if other sub-items remain). Add a one-line note to `docs/threat-model.md` boundary [6] (Poller → Bedrock) "Cost runaway" row: the existing mitigation text mentions "AWS Budget alarm at \$10/mo (planned …)" — flip "planned" to a backward reference (the construct + this PRP). No ADR is required (design-spec §300 already records the decision; a Budget alarm is not an architecture-decision-record-worthy fork — note this explicitly so a reviewer doesn't flag a missing ADR).
-- **VALIDATE**: Gate 4 (the threat-model edit must not introduce `slice`/filler); `grep -n 'AWS Budget alarm' docs/threat-model.md docs/superpowers/specs/2026-05-10-trip-tracker-production-readiness.md` shows the flipped wording.
+### Task 4: threat-model touch-ups (docs) — do NOT touch the companion checklist
+- **ACTION (threat-model.md only)**: Flip all THREE budget references to backward references for the now-built construct, and remove the inaccuracies §0 #3 found:
+  - `docs/threat-model.md:188` boundary [6] "Cost runaway" row: `AWS Budget alarm at $10/mo (planned, slice 9) is the safety net.` → `AWS Budget alarm at $10/mo (BudgetAlarmConstruct, lib/budget-alarm.js; design-spec §300) is the safety net.`
+  - `docs/threat-model.md:197`: `AWS Budget alarm at $10/mo with SNS topic email subscription (slice 9).` → drop "SNS topic" (we use a **direct EMAIL subscriber, no SNS** — §10) and "slice 9" (roadmap-label rule): `AWS Budget alarm at $10/mo, direct email subscriber (BudgetAlarmConstruct).`
+  - `docs/threat-model.md:243`: `AWS Budget alarm at $10/mo (deferred).` → `AWS Budget alarm at $10/mo (built — BudgetAlarmConstruct).`
+- **DO NOT** touch companion spec §5 line 205 (§0 #4): it says "AWS Budget alarm **deployed**" and this PRP deploys nothing; the whole `[ ]` line also still has CI/README/Loom/ADR-0007 unbuilt. Leave it exactly as-is — "deployed-as-pending" stays accurate.
+- **No ADR**: design-spec §300 already records the decision; a Budget alarm is not an architecture-decision fork. Stated so the reviewer gate does not flag a missing ADR.
+- **VALIDATE**: Gate 4 over the changed threat-model lines (no new `slice`/filler introduced); `grep -n 'Budget alarm' docs/threat-model.md` shows zero `slice 9`/`planned`/`deferred`/`SNS` in the three rows, and `git diff -- docs/superpowers/specs/2026-05-10-trip-tracker-production-readiness.md` is empty.
 
 ## 15. Risks and mitigations
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| `BudgetLimit.Amount` asserted as number `10` → test fails on the string `'10'` CFN serialisation | MED | LOW | §6 gotcha + §11 B2 + Gate 5 all explicitly pin the STRING `'10'`. First thing the implementer reads. |
+| Implementer quotes `Amount`/`Threshold` as strings (the original PRP's inverted gotcha) → Group B + Gate 5 fail | LOW | LOW | §0 #1 + §6 + §11 B2/B3 + Gate 5 + Task 3 now all pin **numbers** (`10`, `80`, `100`), verified by direct synth. The wrong assumption was caught and inverted pre-implementation. |
 | `EMAIL_PATTERN` copy drifts from the notifier's | LOW | LOW | Copied verbatim with a SOURCE comment; this construct's Group A tests independently pin the same accept/reject shapes the notifier tests pin, so a divergence fails here. |
 | Construct instantiated with a props object out of habit (notifier takes props) | LOW | LOW | §3 #5 + §14 Task 2 explicitly state NO props; Gate 2 + Group C catch a constructor-signature mismatch. |
 | Reviewer flags "missing ADR for a new construct" | LOW | LOW | §14 Task 4 pre-empts: design-spec §300 already records the decision; a Budget alarm is not an architectural fork. Documented so it is a deliberate non-decision, not an omission. |
@@ -311,7 +330,7 @@ EXPECT: notifier 126 passing; poller + evals 312 passing. (This construct touche
 - Stack imports + instantiates it (no props).
 - `test/budget-alarm.test.js` created; Group A/B/C green.
 - All 6 validation gates green; jest `test/` ~114 passing with every pre-existing suite still green; notifier 126 + poller/evals 312 regression clean.
-- `git grep -i budget -- lib/ test/` shows the new construct + test; `docs/threat-model.md` boundary [6] cost row flipped from "planned" to a backward reference; companion §5 budget clause reflects built.
+- `git grep -i budget -- lib/ test/` shows the new construct + test; all three `docs/threat-model.md` budget rows (188/197/243) flipped to backward references with no `slice`/`SNS`/`planned`/`deferred`; companion spec §5 is untouched (`git diff` empty there).
 - No `slice/T#/Task-N/filler` in any new file or commit.
 
 ## Confidence
