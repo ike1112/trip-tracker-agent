@@ -37,6 +37,7 @@ import jwt
 from strands.tools.mcp.mcp_client import MCPClient
 from mcp.client.streamable_http import streamablehttp_client
 import os
+import time
 import boto3
 from aws_lambda_powertools import Logger
 
@@ -146,10 +147,15 @@ def get_mcp_tools_for_user(user: User):
     # ("travel-agent") and the end user. Every verifier validates this token
     # and couples sub=travel-agent to the agent's own secret (ADR 0006), so
     # it can apply user-specific policies (e.g. travel budget limits).
+    # 5-minute TTL mirrors the poller's signer — a leaked token expires fast
+    # instead of living forever (verifiers enforce exp when present).
+    now = int(time.time())
     token = jwt.encode({
         "sub": "travel-agent",
         "user_id": user.id,
         "user_name": user.name,
+        "iat": now,
+        "exp": now + 5 * 60,
     }, _get_agent_secret(), algorithm="HS256")
 
     clients = []

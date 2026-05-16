@@ -118,4 +118,9 @@ describe('Agent Bedrock IAM grant', () => {
     test('C7 blank agentBedrockModelId throws at synth', () => {
         expect(() => synth({ agentBedrockModelId: '   ' })).toThrow(/agentBedrockModelId/);
     });
+
+    test('C8 non-us. geographic profile throws at synth (loud, not malformed ARNs)', () => {
+        expect(() => synth({ agentBedrockModelId: 'eu.anthropic.claude-3-5-sonnet-20241022-v1:0' }))
+            .toThrow(/not a us\. geographic/);
+    });
 });

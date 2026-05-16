@@ -106,3 +106,17 @@ test('forged JWT returns 401', async () => {
     const resp = await handler(_event({ method: 'tools/list', signed: false }));
     assert.equal(resp.statusCode, 401);
 });
+
+test('F7 expired token (valid secret + sub) returns 401', async () => {
+    seed();
+    const token = jwt.sign(
+        { sub: 'travel-agent', user_id: 'test-user', user_name: 'Tester' },
+        AGENT_SECRET,
+        { expiresIn: -10 },
+    );
+    const resp = await handler({
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', params: {}, id: 1 }),
+    });
+    assert.equal(resp.statusCode, 401);
+});

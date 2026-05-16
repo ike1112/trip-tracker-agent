@@ -20,7 +20,7 @@ const _secretCache = {};
 async function getSecret(envVar) {
     const arn = process.env[envVar];
     if (!arn) throw new Error(`${envVar} env var is required`);
-    if (_secretCache[arn] === undefined) {
+    if (_secretCache[arn] == null) {
         const out = await secretsClient.send(new GetSecretValueCommand({ SecretId: arn }));
         _secretCache[arn] = out.SecretString;
     }
