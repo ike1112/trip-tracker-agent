@@ -2,10 +2,10 @@
 watches and issues real HTTP calls to mock MCP servers.
 
 The mock servers run on threads in-process; one for "flights", one for
-"hotels". Each one verifies the JWT in the Authorization header (using
-the same `JWT_SIGNATURE_SECRET` and `sub == "travel-agent"` check that
-the real `mcp-authorizer/index.js` enforces) and returns canned MCP
-envelopes.
+"hotels". Each one verifies the JWT in the Authorization header (the
+poller signs with its own secret and `sub == "trip-tracker-poller"`,
+the same coupling the real `mcp-authorizer/index.js` enforces — ADR
+0006) and returns canned MCP envelopes.
 
 Asserts that pin down the MCP-call behaviour:
   - 3 active watches → 6 successful MCP calls (3 × 2).
@@ -55,11 +55,12 @@ class _MockMcpHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
             return
-        # Mirror `lambdas/mcp-authorizer/index.js` — only sub=travel-agent
-        # passes. Any other principal gets denied. The poller test still
-        # records the call (so the test can count attempts) but the
-        # response is a 401 so the poller treats it as `watch_errored`.
-        if claims.get("sub") != "travel-agent":
+        # Mirror `lambdas/mcp-authorizer/index.js` — the poller mints
+        # sub=trip-tracker-poller (ADR 0006); only that passes. Any other
+        # principal gets denied. The poller test still records the call
+        # (so the test can count attempts) but the response is a 401 so
+        # the poller treats it as `watch_errored`.
+        if claims.get("sub") != "trip-tracker-poller":
             record = {
                 "path": self.path, "tool": body.get("params", {}).get("name"),
                 "arguments": body.get("params", {}).get("arguments"),
@@ -187,9 +188,9 @@ def test_handler_calls_both_mcps_for_each_active_watch(app_module, monkeypatch):
     assert len(ht_srv.calls) == 3
     assert result == {"watches_polled": 3, "watches_errored": 0}
 
-    # Every call carries a JWT whose `sub` is `travel-agent` (the mock
-    # already rejected anything else with a 401).
-    assert all(c["sub"] == "travel-agent" for c in fl_srv.calls + ht_srv.calls)
+    # Every call carries a JWT whose `sub` is `trip-tracker-poller` (the
+    # mock already rejected anything else with a 401).
+    assert all(c["sub"] == "trip-tracker-poller" for c in fl_srv.calls + ht_srv.calls)
 
     # And the per-call `user_id` claim matches the watch's owner — proves
     # the JWT was minted per-watch, not reused across users.
@@ -303,10 +304,10 @@ def test_handler_skips_when_no_active_watches(app_module, monkeypatch):
 
 
 def test_token_with_wrong_sub_rejected_by_authorizer_path(app_module, monkeypatch):
-    """Mock authorizer rejects any token whose `sub != "travel-agent"` —
-    the same rule `lambdas/mcp-authorizer/index.js` enforces. We patch the
-    poller's `sign_for_user` to mint a token with `sub="attacker"`, then
-    expect every watch to land in `watch_errored`.
+    """Mock authorizer rejects any token whose `sub != "trip-tracker-poller"`
+    — the same rule `lambdas/mcp-authorizer/index.js` enforces (ADR 0006).
+    We patch the poller's `sign_for_user` to mint a token with
+    `sub="attacker"`, then expect every watch to land in `watch_errored`.
     """
     import jwt as pyjwt_lib
 

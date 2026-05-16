@@ -15,12 +15,67 @@
  * start cost is parsing a few JS modules; the deploy package is ~5MB.
  */
 import jwt from 'jsonwebtoken';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { Logger } from '@aws-lambda-powertools/logger';
 import { createMcpServer } from './mcp-server.js';
 import { LambdaTransport } from './lambda-transport.js';
 import { mode as mcpMode } from './client.js';
 
-const JWT_SIGNATURE_SECRET = process.env.JWT_SIGNATURE_SECRET;
+/*
+ * ADR 0006 two-secret + sub-coupling JWT verifier.
+ *
+ * This block is COPIED VERBATIM into lambdas/mcp-authorizer/index.js,
+ * lambdas/flights-mcp/index.js and lambdas/hotels-mcp/index.js. It is
+ * intentionally triplicated, not a shared module: a cross-Lambda-package
+ * shared verifier would need a Lambda layer or a monorepo symlink, both
+ * larger than this hardening change and a new failure surface. Each
+ * package's tests pin the identical cross-sub-forgery + foreign-secret
+ * invariant. EDIT ALL THREE COPIES TOGETHER.
+ */
+let secretsClient = new SecretsManagerClient();
+const _secretCache = {};
+
+// Lazy: fetch on first verify, not at module load, so tests can seed
+// _secretCache before any AWS SDK call fires (ADR 0006).
+async function getSecret(envVar) {
+    const arn = process.env[envVar];
+    if (!arn) throw new Error(`${envVar} env var is required`);
+    if (_secretCache[arn] === undefined) {
+        const out = await secretsClient.send(new GetSecretValueCommand({ SecretId: arn }));
+        _secretCache[arn] = out.SecretString;
+    }
+    return _secretCache[arn];
+}
+
+// Each signing secret may mint exactly one sub. A token must verify
+// under a secret AND carry that secret's allowed sub — without the
+// coupling a leaked agent token would also pass as a poller token.
+const SECRET_SUBS = [
+    ['AGENT_JWT_SECRET_ARN',  'travel-agent'],
+    ['POLLER_JWT_SECRET_ARN', 'trip-tracker-poller'],
+];
+
+async function verifyTwoSecret(token) {
+    for (const [envVar, allowedSub] of SECRET_SUBS) {
+        let claims;
+        try {
+            claims = jwt.verify(token, await getSecret(envVar));
+        } catch {
+            continue; // wrong secret / expired / malformed — try the next
+        }
+        if (claims.sub === allowedSub) return claims;
+        throw new Error(`sub=${claims.sub} not allowed for this secret`);
+    }
+    throw new Error('no candidate secret verified the token');
+}
+
+// Test seam: seed the cache so getSecret never calls AWS in unit tests.
+export function __seedSecretCacheForTests(map) {
+    for (const k of Object.keys(_secretCache)) delete _secretCache[k];
+    for (const [arn, value] of Object.entries(map)) _secretCache[arn] = value;
+}
+/* end ADR 0006 verifier block */
+
 const logger = new Logger({ serviceName: 'flights-mcp' });
 
 logger.info('cold_start', { mcpMode });
@@ -53,7 +108,7 @@ export const handler = async (event) => {
     let claims;
     try {
         const token = authHeader.split(' ')[1];
-        claims = jwt.verify(token, JWT_SIGNATURE_SECRET);
+        claims = await verifyTwoSecret(token);
     } catch (e) {
         return _unauthorized(`jwt_verify_failed:${e.message}`);
     }

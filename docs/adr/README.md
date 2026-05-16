@@ -10,7 +10,7 @@ Format follows Michael Nygard's "Context / Decision / Consequences."
 | [0003](./0003-sequential-poll-loop.md) | Sequential per-watch poll loop | Accepted |
 | [0004](./0004-bedrock-decision.md) | Bedrock Haiku 4.5 as the alert-worthiness oracle | Accepted |
 | [0005](./0005-after-ses-idempotency.md) | After-SES idempotent writeback for `lastAlertedAt` | Accepted |
-| 0006 | Per-component JWT signing secrets via Secrets Manager | Planned |
+| [0006](./0006-per-component-jwt-secrets.md) | Per-component JWT signing secrets via Secrets Manager | Accepted |
 | 0007 | Watches table status GSI for `Query` (not `Scan`) | Planned |
 
 Trip-tracker design context: [`../superpowers/specs/2026-05-08-trip-tracker-agent-design.md`](../superpowers/specs/2026-05-08-trip-tracker-agent-design.md).

@@ -48,7 +48,7 @@ class _Handler(BaseHTTPRequestHandler):
             claims = pyjwt.decode(token, SECRET, algorithms=["HS256"])
         except Exception:
             self.send_response(401); self.end_headers(); return
-        if claims.get("sub") != "travel-agent":
+        if claims.get("sub") != "trip-tracker-poller":
             self.send_response(401); self.end_headers(); return
         tool = body["params"]["name"]
         args = body["params"]["arguments"]

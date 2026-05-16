@@ -215,13 +215,15 @@ def app_module():
     Returns `(app, watches_tbl, fare_tbl, log_handler)` — the handler's
     `.records` list collects every log record emitted during the call.
 
-    Sets `JWT_SIGNATURE_SECRET` and placeholder MCP endpoints so the
+    Sets `POLLER_JWT_SECRET_ARN` and placeholder MCP endpoints so the
     handler can construct; tests that need to exercise the MCP code path
     override the endpoints to point at a real mock server (see
-    `test_handler_with_mcp.py`).
+    `test_handler_with_mcp.py`). The poller's signer fetches its secret
+    lazily from Secrets Manager (ADR 0006); a fake client is injected
+    below so the signed value matches the mock authorizers' SECRET.
     """
     _set_env()
-    os.environ["JWT_SIGNATURE_SECRET"] = "test-secret-aaaaaaaaaaaaaaaaaaaaa"
+    os.environ["POLLER_JWT_SECRET_ARN"] = "arn:aws:secretsmanager:us-east-1:000000000000:secret:poller-test"
     os.environ.setdefault("FLIGHTS_MCP_ENDPOINT", "http://127.0.0.1:1/flights")
     os.environ.setdefault("HOTELS_MCP_ENDPOINT", "http://127.0.0.1:1/hotels")
     with mock_aws():
@@ -233,7 +235,14 @@ def app_module():
         for name in ("enumerator", "jwt_signer", "mcp_client", "snapshot", "writer", "history_window", "gates", "bedrock_decide", "decision", "metrics", "app"):
             sys.modules.pop(name, None)
         importlib.import_module("enumerator")
-        importlib.import_module("jwt_signer")
+        _jwt_signer = importlib.import_module("jwt_signer")
+        # Inject a fake Secrets Manager client so the lazy fetch returns
+        # the same secret the mock authorizers decode with — no AWS call.
+        class _FakeSecrets:
+            def get_secret_value(self, SecretId=None):
+                return {"SecretString": "test-secret-aaaaaaaaaaaaaaaaaaaaa"}
+        _jwt_signer._secrets = _FakeSecrets()
+        _jwt_signer._cached_secret = None
         importlib.import_module("mcp_client")
         importlib.import_module("snapshot")
         importlib.import_module("writer")

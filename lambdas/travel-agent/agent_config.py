@@ -1,3 +1,5 @@
+import os
+
 from strands.models import BedrockModel
 
 # Chat agent model. Inherited from the original scaffold (Claude 3.5 Haiku via
@@ -5,9 +7,14 @@ from strands.models import BedrockModel
 # for the chat agent because watch-creation flows need stronger reasoning;
 # upgrading the chat model is tracked separately. The poller picks its own
 # alert-decision model independently (see `lambdas/poller/bedrock_decide.py`).
+#
+# The model id comes from AGENT_BEDROCK_MODEL_ID (injected by the CDK stack
+# from the same context value that scopes the Bedrock IAM grant, so the
+# grant ARNs and the invoked model cannot drift — ADR 0006). The literal
+# is the fallback so existing tests need no fixture change.
 model = BedrockModel(
     region_name="us-east-1",
-    model_id="us.anthropic.claude-3-5-haiku-20241022-v1:0",
+    model_id=os.getenv("AGENT_BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-haiku-20241022-v1:0"),
 )
 
 # System prompt for the trip-tracker agent. The shape follows design-spec §4:

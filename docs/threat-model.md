@@ -61,23 +61,25 @@ its own handler as defense in depth (slice 3, `lambdas/flights-mcp/index.js`).
 
 | Secret | Where it lives | Lifetime | Notes |
 |---|---|---|---|
-| `JWT_SIGNATURE_SECRET` | Lambda env var (every Lambda in the chain) | Rotates only on stack redeploy | Hard-coded literal in the stack today; ADR 0006 will revisit. |
+| Agent JWT signer | Secrets Manager (`trip-tracker-agent-jwt-signer`); read by the agent minter + both MCP verifier sites | Manual rotation (console + redeploy) | Per-component secret, `sub: travel-agent`. No value in the repo (ADR 0006, commit pending). |
+| Poller JWT signer | Secrets Manager (`trip-tracker-poller-jwt-signer`); read by the poller minter + both MCP verifier sites | Manual rotation (console + redeploy) | Per-component secret, `sub: trip-tracker-poller`. Replaces the shared hard-coded literal (ADR 0006, commit pending). |
 | Cognito signing keys | Cognito-managed (JWKS endpoint) | Rotated by Cognito | Public keys only on our side. |
 | `DUFFEL_API_KEY` | Lambda env var, flights-mcp only | Rotated by hand at the provider | Only present if `MCP_MODE=live`. Fixture deploys leave it empty. |
 | `LITEAPI_API_KEY` | Same pattern (slice 4) | | |
 
-**Why Lambda env vars and not Secrets Manager (yet):**
-- Single-tenant personal use; the radius of a key leak is one developer,
-  not customers.
-- Secrets Manager adds ~$0.40/mo per secret plus per-API-call costs.
-  The cost/benefit at personal scale doesn't justify it.
-- The stack is set up so swapping in Secrets Manager is a localised
-  change in two CDK constructs, not a redesign.
+**JWT signing secrets** are now per-component values in AWS Secrets
+Manager (ADR 0006), read lazily at first sign/verify and scoped per
+least-privilege `grantRead`. The two **provider API keys**
+(`DUFFEL_API_KEY`, `LITEAPI_API_KEY`) remain Lambda env vars:
+- Single-tenant personal use; the radius of a provider-key leak is one
+  developer, not customers.
+- They are only populated on `MCP_MODE=live` deploys; fixture deploys
+  leave them empty.
 
-**What would change for production:** all three external secrets move
-to AWS Secrets Manager with automatic rotation; the JWT signing secret
-gets KMS-encrypted at rest and rotated independently of the API keys.
-Captured in ADR 0006 (planned, slice 9).
+**What would change for production:** the provider API keys also move to
+Secrets Manager with automatic rotation, and the JWT signing secrets
+gain an automatic rotation Lambda (manual console + redeploy rotation
+today — ADR 0006).
 
 ## Boundary-by-boundary threats
 
@@ -150,7 +152,7 @@ the alert decision.
 
 | Threat | Mitigation |
 |---|---|
-| Compromised poller mints tokens that the authorizer accepts as the agent | Pre-existing — both components share `JWT_SIGNATURE_SECRET` and present the same `sub: "travel-agent"` claim. The authorizer cannot tell agent-minted tokens from poller-minted tokens; per-component `sub` values + per-component secrets are the slice-9 fix (ADR 0006). The stack file carries an explicit `TODO(slice-9)` comment so this can't quietly survive. |
+| Compromised poller mints tokens that a verifier accepts as the agent | **Closed (ADR 0006).** The agent and poller now sign with separate Secrets Manager secrets and present distinct `sub` claims (`travel-agent` vs `trip-tracker-poller`). Every verifier — the MCP authorizer Lambda AND both MCP server handlers — couples each secret to its allowed `sub`, so a poller-secret-signed `travel-agent` token (or the reverse) is rejected. Pinned by the cross-sub-forgery cases in the authorizer (Group D) and both server handlers (Group F). |
 | One bad watch's MCP failure starves all the others | **Sequential per-watch loop with per-watch try/except (ADR 0003).** `McpCallError`, `ValueError`, `KeyError` are categorised and skipped; `watches_errored` metric increments; the loop continues. Verified by `tests/test_handler_with_mcp.py::test_one_failing_mcp_does_not_block_other_watches`. |
 | Cron-triggered code parses untrusted user input from the EventBridge event | The handler does not read any field from the `event` payload — schedule envelopes are ignored. The only inputs are the DDB rows themselves and the MCP responses, both of which are validated downstream. |
 | MCP-response prompt injection / payload bombs | T2's `_NoRedirectHandler` blocks SSRF via redirect; `MAX_RESPONSE_BYTES = 2MB` cap on the body; T3's `_validate_deep_link` rejects non-`https://` and >2KB strings before they land in DDB. |
@@ -278,3 +280,13 @@ These are real risks the codebase does not address, by design for v1:
   window bounded by the dedup gate's price-proximity band). ADR
   0005 documents the at-least-once trade-off. [4]'s IAM row updated
   to reference the new SES + Lambda invoke grants.
+- **2026-05-15** — ADR 0006: the shared-secret risk is **closed**. The
+  hard-coded literal and its `TODO` comment are removed from
+  `lib/strands-agent-on-lambda-stack.js`; the agent and poller now sign
+  with separate Secrets Manager secrets and distinct `sub` claims, and
+  every verifier (MCP authorizer + both MCP server handlers) couples
+  each secret to its allowed `sub`. Supersedes the slice-5 entry's
+  "triple-tracked … will resolve it" note. The agent's
+  `bedrock:InvokeModel*` `Resource: '*'` grant is also closed —
+  scoped to the 3 US geographic-profile destination foundation-model
+  ARNs + the inference-profile ARN. ADR 0006 documents the design.

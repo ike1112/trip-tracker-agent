@@ -27,11 +27,6 @@ from user import User
 
 l = logger.get()
 
-# Used when the agent later calls MCP servers that require internally signed JWTs.
-# It is loaded here because the Lambda environment is the root configuration
-# boundary, even though this file itself does not sign the outgoing MCP tokens.
-JWT_SIGNATURE_SECRET = os.environ['JWT_SIGNATURE_SECRET']
-
 # Cognito publishes public signing keys at this URL. We use them to verify that
 # the incoming bearer token was really issued by Cognito and was not tampered with.
 COGNITO_JWKS_URL = os.environ['COGNITO_JWKS_URL']

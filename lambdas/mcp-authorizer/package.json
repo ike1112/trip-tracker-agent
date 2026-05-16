@@ -3,7 +3,11 @@
   "author": "Anton Aleksandrov",
   "license": "Apache-2.0",
   "description": "A simple API Gateway authorizer",
+  "scripts": {
+    "test": "node --import ./tests/setup.js --test --test-reporter=spec \"tests/*.test.js\""
+  },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1048.0",
     "jsonwebtoken": "^9.0.2"
   }
 }

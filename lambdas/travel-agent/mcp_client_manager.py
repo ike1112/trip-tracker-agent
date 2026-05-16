@@ -15,8 +15,9 @@ The MCP split is a real architectural decision:
   each MCP server owns one domain's API integration. Each can be deployed,
   scaled, and updated independently without touching the others.
 
-- Security boundary: every MCP call carries a user-scoped JWT signed here with
-  a shared secret (JWT_SIGNATURE_SECRET). Each MCP server's authorizer Lambda
+- Security boundary: every MCP call carries a user-scoped JWT signed here
+  with the agent's OWN per-component secret (sub=travel-agent, ADR 0006).
+  Each MCP server's authorizer Lambda — and the server handler itself —
   validates that JWT before invoking the tool handler. This means even if
   someone could call an MCP server directly, they would still need a valid
   signed token.
@@ -36,12 +37,27 @@ import jwt
 from strands.tools.mcp.mcp_client import MCPClient
 from mcp.client.streamable_http import streamablehttp_client
 import os
+import boto3
 from aws_lambda_powertools import Logger
 
-# Shared secret used to sign internal JWTs sent to the MCP server.
-# This is different from Cognito — it's a service-to-service credential,
-# not a user-facing token.
-jwt_signature_secret = os.environ['JWT_SIGNATURE_SECRET']
+# The agent's OWN HS256 signing secret (ADR 0006), fetched lazily from
+# Secrets Manager via AGENT_JWT_SECRET_ARN on the first MCP call — not at
+# import, so tests can inject a fake client before any AWS call. This is
+# a service-to-service credential, distinct from the Cognito user token.
+_secrets = None
+_cached_agent_secret = None
+
+
+def _get_agent_secret():
+    global _secrets, _cached_agent_secret
+    if _cached_agent_secret is None:
+        arn = os.environ.get("AGENT_JWT_SECRET_ARN")
+        if not arn:
+            raise EnvironmentError("AGENT_JWT_SECRET_ARN env var is not set")
+        if _secrets is None:
+            _secrets = boto3.client("secretsmanager")
+        _cached_agent_secret = _secrets.get_secret_value(SecretId=arn)["SecretString"]
+    return _cached_agent_secret
 
 # Endpoints for each MCP server the agent talks to. All values are
 # injected by CDK at deploy time. Empty or unset endpoints are tolerated
@@ -127,14 +143,14 @@ def get_mcp_tools_for_user(user: User):
     l.info("mcp_cache_miss", extra={"user_id_prefix": user.id[:8]})
 
     # Mint a short-lived internal JWT that identifies both the calling service
-    # ("travel-agent") and the end user. The MCP server validates this token
-    # so it can apply user-specific policies (e.g. travel budget limits).
-    # One token works for every endpoint — they share the same JWT secret.
+    # ("travel-agent") and the end user. Every verifier validates this token
+    # and couples sub=travel-agent to the agent's own secret (ADR 0006), so
+    # it can apply user-specific policies (e.g. travel budget limits).
     token = jwt.encode({
         "sub": "travel-agent",
         "user_id": user.id,
         "user_name": user.name,
-    }, jwt_signature_secret, algorithm="HS256")
+    }, _get_agent_secret(), algorithm="HS256")
 
     clients = []
     tools = []
