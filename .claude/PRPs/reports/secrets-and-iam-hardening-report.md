@@ -72,8 +72,29 @@ in us-east-1/us-east-2/us-west-2 + the inference-profile ARN).
   This is a false positive, not a roadmap label; the untouched legit
   code was deliberately not mangled to satisfy an over-broad regex.
 
-## Outstanding
+## Sequential 4-reviewer gate (PRP §13) — COMPLETE
 
-PRP §13 mandates a sequential 4-reviewer gate (code-reviewer five-axis →
-security-auditor → test-engineer → code-reviewer comments) before this is
-shippable. That is a separate phase, not a Ralph iteration.
+Reviewers run one at a time (parallel stalls per project precedent),
+different models, fixes applied inline and pinned by tests, each round
+committed separately.
+
+| # | Reviewer (model) | Verdict | Findings → resolution | Commit |
+|---|---|---|---|---|
+| 1 | code-reviewer five-axis (sonnet) | APPROVE | 1 P2 (agent token never expired) + 3 P3 (null-secret cache, missing F-group expiry test, non-us model silent-fail). All fixed. | `fbabdca` |
+| 2 | security-auditor (opus) | 0 critical / 0 high | 2 MED (model-id ARN injection `us.*`→`foundation-model/*`; infra-error laundered into auth-deny) + 3 LOW (alg pin, exp not verifier-enforced, sub in log). All fixed; threat-model/ADR updated to enforced reality. | `38d1ae9` |
+| 3 | test-engineer (sonnet) | no P1 | 3 P2 (D9 didn't guard the HS256 pin → added HS384 D11/F9; infra-vs-auth untested → D12; Node warm-cache — accepted, Python E2 covers the identical contract) + 3 P3. | `9c34287` |
+| 4 | code-reviewer comments (sonnet) | REQUEST CHANGES | 2 P1 (durable-doc scaffolding "commit pending"; `slice-5` label in new change-log) + 1 P2 (misleading exp comment) + 2 P3. P1/P2 + the in-scope P3 fixed; one pre-existing orthogonal `slice 3` left per scope discipline (noted for a future pass). | `695b5a8` |
+
+Net: the verifier hardened materially through the gate — HS256 pinned,
+`exp` enforced at the boundary, model-id format-validated (closing a
+re-opened wildcard), infra failures fail-closed with a distinct alarm.
+Triplicated block re-verified byte-identical after every round. No P1
+logic/security defect survived; the only P1s were prose-rule violations,
+fixed.
+
+## Final gate state (commit `695b5a8`)
+
+All 7 validation gates re-confirmed green on the final post-review state.
+Verifier suites: mcp-authorizer 12, flights 22, hotels 21 (D1–D12,
+F1–F9 incl. cross-sub forgery, foreign-secret, alg=none, HS384-pin,
+no-exp, expired, fail-closed-infra). Notifier 126, poller+evals 312.
