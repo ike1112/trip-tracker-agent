@@ -13,7 +13,7 @@ will see `LastEvaluatedKey` set and require pagination. We do this
 transparently so callers see a single iterable.
 
 Yield order is unspecified (a GSI Query does not guarantee item order
-and `lib/poller/app.py` processes each watch independently, so order is
+and `lambdas/poller/app.py` processes each watch independently, so order is
 not part of this contract).
 """
 
