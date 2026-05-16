@@ -58,6 +58,16 @@ def _create_tables(ddb):
         AttributeDefinitions=[
             {"AttributeName": "userId", "AttributeType": "S"},
             {"AttributeName": "watchId", "AttributeType": "S"},
+            # status-index GSI PK (ADR 0007) — the poller Queries this
+            # instead of Scanning. Mirrors lib/data-stores.js exactly.
+            {"AttributeName": "status", "AttributeType": "S"},
+        ],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "status-index",
+                "KeySchema": [{"AttributeName": "status", "KeyType": "HASH"}],
+                "Projection": {"ProjectionType": "ALL"},
+            }
         ],
         BillingMode="PAY_PER_REQUEST",
     )

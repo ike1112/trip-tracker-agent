@@ -103,8 +103,11 @@ def list_watches(user_id: str, status: Optional[str] = "active") -> list[dict]:
     """List all watches for a user, optionally filtered by status."""
     kwargs = {"KeyConditionExpression": Key("userId").eq(user_id)}
     if status:
-        # FilterExpression runs after the Query — fine at personal scale.
-        # If watch counts grow, switch to a status GSI (see data-stores.js).
+        # FilterExpression runs after the per-user Query — fine at
+        # personal scale. The `status-index` GSI (ADR 0007) does NOT
+        # serve this path: it is poll-only (cross-user, `status` PK).
+        # A per-user active-list optimisation would need a separate
+        # `userId`+`status` composite index — out of scope (ADR 0007).
         kwargs["FilterExpression"] = Attr("status").eq(status)
     resp = _watches_table.query(**kwargs)
     return resp.get("Items", [])
