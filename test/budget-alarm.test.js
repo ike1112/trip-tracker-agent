@@ -88,6 +88,14 @@ describe('BudgetAlarmConstruct — Group A: email validation', () => {
     test('A5 throws when neither email is set', () => {
         expect(build(undefined, undefined)).toThrow(/budgetAlarmEmail/);
     });
+
+    test('A6 a malformed fallback names notifierRecipientEmail, not budgetAlarmEmail', () => {
+        // budgetAlarmEmail unset → the bad value came from the fallback;
+        // the error must point at the key the operator actually set. The
+        // anchored regex fails if the message said "budgetAlarmEmail …".
+        expect(build(undefined, 'not-an-email'))
+            .toThrow(/^notifierRecipientEmail is required and must look like an email/);
+    });
 });
 
 describe('BudgetAlarmConstruct — Group B: synthesised budget shape', () => {
@@ -127,6 +135,12 @@ describe('BudgetAlarmConstruct — Group B: synthesised budget shape', () => {
                 }),
             ]),
         });
+        // arrayWith does not pin length — assert exactly two so an
+        // erroneously-added third notification is caught here, not only
+        // via B4's subscriber path.
+        const ns = Object.values(t.findResources('AWS::Budgets::Budget'))[0]
+            .Properties.NotificationsWithSubscribers;
+        expect(ns).toHaveLength(2);
     });
 
     test('B4 both notifications carry exactly one EMAIL subscriber with the resolved address', () => {
@@ -147,6 +161,12 @@ describe('BudgetAlarmConstruct — Group B: synthesised budget shape', () => {
 });
 
 describe('BudgetAlarmConstruct — Group C: full-stack wiring', () => {
+    // C1 calls jest.resetModules() mid-test, which makes the top-of-file
+    // requires stale relative to the post-reset registry. Resetting again
+    // afterwards keeps the isolation order-independent — a future test
+    // added after Group C gets a clean registry, not C1's leftovers.
+    afterAll(() => jest.resetModules());
+
     test('C1 the full stack synthesises exactly one $10/MONTHLY/COST budget', () => {
         process.env.DUFFEL_API_KEY = 'stub';
         process.env.LITEAPI_API_KEY = 'stub';

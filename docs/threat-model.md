@@ -198,7 +198,7 @@ and the strict-JSON contract.
   (`BudgetAlarmConstruct`, `lib/budget-alarm.js`); not yet `cdk deploy`-ed.
   SNS / multi-channel fan-out is a deliberate non-goal (design-spec §300
   specifies email; SNS adds infra for no value at personal scale).
-- Eval framework wired to CI on workflow_dispatch (slice 9) — manual trigger only to keep cost discipline.
+- Eval framework wired to CI on workflow_dispatch — manual trigger only to keep cost discipline.
 - Periodic golden-set expansion as production traffic surfaces edge
   cases the hand-labelled corpus didn't cover.
 - Cloudwatch alarm on `bedrock_decisions_made` spiking above the
