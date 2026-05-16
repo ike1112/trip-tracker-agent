@@ -86,10 +86,13 @@ You ──chat──> Web UI (Cognito-gated) ──JWT──> API Gateway
 
 ### Fixture vs live
 
-Every external integration runs in **fixture/stub mode by default** —
+Every external integration can run in **fixture/stub mode** —
 recorded API responses, no Bedrock call, no SES send, no cost,
-deterministic tests. Flip individual subsystems to live with deploy
-configuration (below). This keeps the entire test suite free to run.
+deterministic tests. The MCP servers default to fixture mode; Bedrock
+and SES default to live for production deploys. Pass
+`-c bedrockMode=stub -c sesMode=stub` for a cost-free dry run (see
+Configure below). The entire test suite always runs in fixture/stub
+mode regardless of deploy configuration.
 
 ## Running the project
 
@@ -121,7 +124,10 @@ values handy, then expand them onto the deploy command. A fixture/stub
 deploy needs **no** external API keys:
 
 ```bash
-cdk deploy                                  # all subsystems fixture/stub
+# Cost-free dry run — MCP fixture responses, Bedrock stub, no SES send:
+cdk deploy -c bedrockMode=stub -c sesMode=stub
+
+# Full live deploy — real flight/hotel prices, real Bedrock call, real SES:
 cdk deploy -c mcpMode=live -c duffelApiKey=… -c liteApiKey=… \
            -c bedrockMode=live -c sesMode=live \
            -c notifierSenderEmail=… -c notifierRecipientEmail=…
