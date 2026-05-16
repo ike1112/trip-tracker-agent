@@ -17,12 +17,24 @@ delete pre-baked entries — they are pinned by gates.
 | 6 | LOW | A GSI cannot be queried with `ConsistentRead=True` (strongly-consistent reads are unsupported on GSIs — boto3 raises `ValidationException`). GSIs are also eventually consistent: a just-created "active" watch may miss the *immediately* following poll tick. | §14 Task 1 must **not** pass `ConsistentRead`. ADR Consequences documents the one-cycle latency as acceptable (the poller is scheduled; a brand-new watch waiting one tick is harmless and strictly cheaper than Scan-all). |
 | 7 | LOW | Query still 1 MB-paginates exactly like Scan — the `LastEvaluatedKey`/`ExclusiveStartKey` loop is unchanged. The existing `test_paginates_when_scan_returns_last_evaluated_key` name will be stale ("scan"). Renaming it is a durable-artifact accuracy fix, not optional. | §14 Task 3 renames it to `test_paginates_when_query_returns_last_evaluated_key` and updates the conftest/test docstrings that say "Scan". |
 | 8 | INFO (honest ceiling) | A `status`-only GSI partition key has very low cardinality — every active row shares **one** GSI partition. At scale this is a hot partition; it is *less wrong* than Scan-all, not the production-correct design (which would shard the GSI PK or use a different access pattern). | ADR Decision/Consequences states this explicitly and scopes the decision to personal scale — same honesty framing as the original Scan decision in `data-stores.js`. Not a defect; a documented boundary. |
+| 9 | HIGH | **GSI backfill window.** Adding a GSI to an existing table is async — the index is `CREATING`/backfilling and a `Query` against it raises `ValidationException` ("Cannot read from backfilling GSI") until `ACTIVE`. The poller is wired in the *same* stack after the table (`strands-agent-on-lambda-stack.js`) and runs on an EventBridge schedule (`poller-server.js:179`), so one `cdk deploy` flips the code to Query while the index may still be backfilling. | §14 Task 5 + ADR Consequences document the one-time window honestly: a fresh `RemovalPolicy.DESTROY` personal table backfills near-instantly with ≤dozens of rows; a scheduled poll tick that lands mid-backfill fails that tick only and self-heals on the next tick (EventBridge re-fires; the poll is idempotent). **No try/except cruft** — a one-time deploy window does not justify untestable defensive code (§9 #5 precedent). The ADR records the two-step-deploy option (deploy GSI, wait `ACTIVE`, deploy enumerator) as the zero-miss alternative for a populated table. |
+| 10 | MED | **moto GSI-Query pagination fidelity is unproven.** The existing 400-row test proved *Scan* paginated; moto's GSI-`Query` `LastEvaluatedKey` behaviour under `PAY_PER_REQUEST` may return everything in one page, so a green P-D could prove nothing about the pagination loop. | §11 adds **P-G**: a deterministic stubbed-`query` test (inject a fake returning page-1 **with** `LastEvaluatedKey` then page-2 without) that proves the loop follows `LastEvaluatedKey` independent of moto fidelity. P-D stays as a real-moto smoke; P-G is the contractual pagination proof. §14 Task 3 + §15 amended. |
+| 11 | MED | **Yield order is not contractually unchanged.** §6 said "no change to the iterable contract", but Scan and GSI-Query yield in different orders, and P-A/P-C sort before asserting so they cannot catch an order-dependent downstream regression. | §6/§11 amended: order is **explicitly unspecified** (Scan order never was guaranteed either). Downstream (`lambdas/poller/app.py` per-watch loop) processes each watch independently with no cross-watch ordering dependency — confirmed in §8 mandatory reading. No `sort` added (pointless overhead; independence is the real guarantee). |
+| 12 | MED | **J-B too loose.** "Some poller policy Resource contains `index/*`" passes even if `dynamodb:Query` is absent, the statement is on the wrong role, or the table ARN is missing. | §14 Task 6 + §11 J-B + Gate 5 tightened: assert the **same** IAM statement attached to the **poller** role has `dynamodb:Query` in `Action` **and** `Resource` containing **both** the Watches table ARN and its `/index/*`. |
+| 13 | LOW | **Gate 1 overclaims.** `node -e "require('./lib/data-stores.js')"` only loads the module; it never instantiates `DataStoresConstruct` or synthesises, so it cannot catch an invalid `addGlobalSecondaryIndex` (e.g. a capacity block on a PAY_PER_REQUEST GSI). §15 wrongly credited Gate 1 with that. | §12 Gate 1 reworded to its true claim (module parses/loads). §15 capacity-block risk row repointed to **Gate 4** (real synth) as the actual backstop. |
+| 14 | LOW | **Gate 2 inconsistent + import-time-binding blind spot.** The command says "with `WATCHES_TABLE_NAME` set" but does not set it; and `enumerator` binds `_watches_table` at import, so a bare `import` can pass while the configured path is broken. | §12 Gate 2 command fixed to actually export `AWS_DEFAULT_REGION` + fake creds + `WATCHES_TABLE_NAME`; its claim narrowed to "module imports under a configured env". Gate 3 (full pytest) remains the behavioural proof. |
+| 15 | LOW | **Stale GSI recommendation outside the touched set.** `lambdas/travel-agent/watches.py:102-107` still advises "switch to a status GSI" for *per-user* `list_watches`. The new index is `status`-only (cross-user poll) and is the **wrong** index for a per-user active list (that needs a `userId`+`status` composite). Leaving the comment makes a reader think the just-built GSI serves that path — it does not. | §5 systems-affected + §8 + §14 Task 4 + Gate 9 extended to `watches.py`: rewrite that comment to say the `status-index` is poll-only (cross-user) and a per-user active-list optimisation would need a *separate composite* index — explicitly out of scope (§10). |
 
 Net: no behaviour change to *what* the poller yields (still every
-`status=="active"` row, full attributes, paginated). The change is the
-read path (Scan+filter → Query on GSI), its cost profile, and the
-honest documentation of the new sparse-index invariant and the
-status-PK cardinality ceiling.
+`status=="active"` row, full attributes, paginated) — but yield
+**order** is now explicitly unspecified (#11), and the swap carries a
+one-time GSI-backfill window (#9). The change is the read path
+(Scan+filter → Query on GSI), its cost profile, and the honest
+documentation of the sparse-index invariant (#3), the status-PK
+cardinality ceiling (#8), the backfill window (#9), and the
+poll-only scope of this index versus the untouched per-user path (#15).
+Codex adversarial pass folded findings 9-15; pre-baked 1-8 stand
+(codex flagged none of them as wrong).
 
 ---
 
@@ -75,7 +87,7 @@ flips + tests.
 |---|---|
 | Type | ENHANCEMENT (read-path optimisation; ADR-worthy) |
 | Complexity | LOW–MED (one GSI, one ~6-line read-loop rewrite, shared test fixture, ADR) |
-| Systems affected | `lib/data-stores.js`, `lambdas/poller/enumerator.py`, `lambdas/poller/tests/conftest.py`, `lambdas/poller/tests/test_enumerator.py`, `docs/adr/`, `docs/adr/README.md` |
+| Systems affected | `lib/data-stores.js`, `lambdas/poller/enumerator.py`, `lambdas/poller/tests/conftest.py`, `lambdas/poller/tests/test_enumerator.py`, `lambdas/travel-agent/watches.py` (stale-comment fix only, §0 #15), `docs/adr/`, `docs/adr/README.md` |
 | Dependencies | None new. `aws-cdk-lib/aws-dynamodb`, `boto3.dynamodb.conditions.Key`, `moto` GSI support (already a dep) |
 | Estimated tasks | 6 |
 
@@ -107,8 +119,13 @@ AFTER  (every tick)
                               wait one tick (documented, acceptable)
 ```
 
-No change to the iterable contract: same rows, same full attributes,
-same transparent pagination. Only the engine and its cost change.
+Same rows, same full attributes, same transparent pagination. Only the
+engine and its cost change. **Yield order is explicitly unspecified**
+(§0 #11): Scan never guaranteed order and GSI-Query yields differently;
+this is safe because `lambdas/poller/app.py` processes each watch
+independently in a per-row loop — there is no cross-watch ordering
+dependency in the MCP/gate/notifier path, so order is not part of the
+contract and no `sort` is imposed.
 
 ---
 
@@ -190,6 +207,8 @@ GlobalSecondaryIndexes=[{
 | P1 | `docs/adr/0006-per-component-jwt-secrets.md` | headers + `## Closes` | Confirms the `## Closes` trailer convention. |
 | P1 | `test/observability-dashboard.test.js` | all | Jest `Template.fromStack` + `hasResourceProperties` pattern to mirror for the new construct test. |
 | P2 | `lib/poller-server.js` | 100-140 | Confirms `grantReadData(pollerFn)` (§0 #5) — read-only, do not change. |
+| P1 | `lambdas/poller/app.py` | the per-watch loop (~271) | Proves downstream is per-row independent → yield order is non-contractual (§0 #11). Read-only. |
+| P1 | `lambdas/travel-agent/watches.py` | 95-115 | The stale "switch to a status GSI" comment to correct (§0 #15) — this index does NOT serve that per-user path. |
 
 No external doc research needed: GSI-on-PAY_PER_REQUEST, sparse-index,
 GSI-eventual-consistency, and "no ConsistentRead on GSI" are all
@@ -251,9 +270,11 @@ may add citations but the behaviour is pinned by tests, not prose.
 | P-D | `test_paginates_when_query_returns_last_evaluated_key` (RENAMED from `…scan…`) | 400 padded rows force ≥2 GSI-query pages; iterator follows `LastEvaluatedKey` | `test_enumerator.py` |
 | P-E | `test_missing_table_env_var_raises_clear_error` (existing) | unchanged guard still raises `EnvironmentError` | `test_enumerator.py` |
 | P-F | **NEW** `test_query_not_scan_and_full_row_projected` | monkeypatch/spy: `_watches_table.query` is called with `IndexName="status-index"` & `Key("status").eq("active")`; `_watches_table.scan` is **never** called; a returned row still has `preferences` & `dateWindow` (Projection=ALL, §0 #1) | `test_enumerator.py` |
+| P-G | **NEW** `test_pagination_follows_last_evaluated_key_deterministically` | inject a fake `query` returning page-1 `{Items:[…], LastEvaluatedKey:K}` then page-2 `{Items:[…]}` (no key); assert the iterator yields **both** pages' rows in order and sets `ExclusiveStartKey=K` on call 2. Proves the loop independent of moto GSI-pagination fidelity (§0 #10) | `test_enumerator.py` |
 | J-A | **NEW** GSI shape | `AWS::DynamoDB::Table` WatchesTable has `GlobalSecondaryIndexes` = exactly one `status-index`, KeySchema `status`/HASH, `Projection.ProjectionType==ALL`; `AttributeDefinitions` includes `status`/`S` | `test/data-stores.test.js` (new) |
-| J-B | **NEW** poller grant covers the index (§0 #5) | full-stack synth: the poller function's DDB IAM policy `Resource` list contains an `index/*`-suffixed ARN (GetAtt/Join shape) | `test/data-stores.test.js` |
+| J-B | **NEW** poller grant covers the index (§0 #5, #12) | full-stack synth: the **poller role** has an IAM policy statement whose `Action` includes `dynamodb:Query` **and** whose `Resource` contains **both** the Watches table ARN **and** its `/index/*` ARN (same statement; not merely "some policy somewhere") | `test/data-stores.test.js` |
 | J-C | **NEW** exactly one GSI / no regression | WatchesTable has exactly one GSI; FareHistory unchanged (no GSI) | `test/data-stores.test.js` |
+| J-D | **NEW** stale-comment fix (§0 #15) | `lambdas/travel-agent/watches.py` no longer recommends "switch to a status GSI" for per-user list; states the `status-index` is poll-only and a per-user index would be a separate composite | Gate 9 grep |
 
 Edge cases covered: empty partition, multi-user span, ≥2-page
 pagination, missing-env guard, projection completeness, query-not-scan,
@@ -265,15 +286,15 @@ IAM index coverage, single-GSI (no accidental second index).
 
 | Gate | Command (from the right cwd) | Expect |
 |------|------------------------------|--------|
-| 1 construct loads | `node -e "require('./lib/data-stores.js')"` | no throw |
-| 2 enumerator imports | `cd lambdas/poller && ../../.venv-tests/Scripts/python.exe -c "import enumerator"` (with `WATCHES_TABLE_NAME` set) | no throw |
-| 3 full poller suite | `cd lambdas/poller && ../../.venv-tests/Scripts/python.exe -m pytest tests/ -q` | all green incl. P-A…P-F; all four conftest fixtures still work |
-| 4 GSI synth shape | `npx jest test/data-stores.test.js` | J-A/J-C green: one `status-index`, `Projection.ProjectionType==ALL`, `status` in AttributeDefinitions |
-| 5 poller-grant index ARN | (part of `npx jest test/data-stores.test.js`) | J-B green: poller DDB policy Resource includes `index/*` |
+| 1 module loads (§0 #13) | `node -e "require('./lib/data-stores.js')"` | no throw — proves the module **parses/requires** only. It does NOT instantiate/synthesise; an invalid `addGlobalSecondaryIndex` is caught by **Gate 4**, not here. |
+| 2 enumerator imports (§0 #14) | `cd lambdas/poller && AWS_DEFAULT_REGION=us-east-1 AWS_ACCESS_KEY_ID=testing AWS_SECRET_ACCESS_KEY=testing WATCHES_TABLE_NAME=Dummy ../../.venv-tests/Scripts/python.exe -c "import enumerator"` | no throw — module imports under a configured env. Behavioural proof is Gate 3, not this. |
+| 3 full poller suite | `cd lambdas/poller && ../../.venv-tests/Scripts/python.exe -m pytest tests/ -q` | all green incl. P-A…P-G; all four conftest fixtures still work |
+| 4 GSI synth shape | `npx jest test/data-stores.test.js` | J-A/J-C green: one `status-index`, `Projection.ProjectionType==ALL`, `status` in AttributeDefinitions; invalid GSI config (e.g. capacity block on PAY_PER_REQUEST) throws here |
+| 5 poller-grant index ARN (§0 #12) | (part of `npx jest test/data-stores.test.js`) | J-B green: the **poller role** has one statement with `dynamodb:Query` AND `Resource` covering both the table ARN and `/index/*` |
 | 6 full JS suite | `npx jest test/` | no regression (currently 128 across 6 suites + the new suite) |
 | 7 evals/poller regression | `cd lambdas/poller && ../../.venv-tests/Scripts/python.exe -m pytest tests/ -q` then notifier suite | poller + notifier unchanged green |
 | 8 cleanliness | `rg -n 'slice[ -_]?\d\|\bT[1-9]\b\|\bTask [1-9]\b\|Checkpoint [A-Z]\b\|phase \d\|\b(basically\|simply\|obviously\|essentially\|clearly\|merely\|kind of)\b' lib/data-stores.js lambdas/poller/enumerator.py lambdas/poller/tests/conftest.py lambdas/poller/tests/test_enumerator.py docs/adr/0007-watches-status-gsi.md test/data-stores.test.js` | zero matches (ADR `**Status:**` line / "ADR 0007" are allowed and not matched by this pattern) |
-| 9 doc-flip accuracy | `git diff -- lib/data-stores.js lambdas/poller/enumerator.py` shows the JSDoc/docstrings now describe the **built** GSI (no "planned"/"if this ever grows"/"requires a Scan"); `docs/adr/README.md:14` row reads `Accepted` | manual + grep: `rg -n 'planned\|if this ever grows\|requires a Scan' lib/data-stores.js lambdas/poller/enumerator.py` → zero |
+| 9 doc-flip accuracy | `git diff -- lib/data-stores.js lambdas/poller/enumerator.py lambdas/travel-agent/watches.py` shows JSDoc/docstrings describe the **built** GSI; `docs/adr/README.md:14` row reads `Accepted`; `watches.py` no longer says "switch to a status GSI" as if this index serves per-user list (§0 #15) | grep: `rg -n 'planned\|if this ever grows\|requires a Scan' lib/data-stores.js lambdas/poller/enumerator.py` → zero; `rg -n 'switch to a status GSI' lambdas/travel-agent/watches.py` → zero (replaced with the poll-only clarification) |
 
 CDK synth in jest needs `'aws:cdk:bundling-stacks': []` context (mirror
 `test/observability-dashboard.test.js` / Group C of `budget-alarm.test.js`).
@@ -334,9 +355,17 @@ CDK synth in jest needs `'aws:cdk:bundling-stacks': []` context (mirror
   and a `Key("status").eq("active")` condition, assert `scan` never
   called, and assert a yielded row still contains `preferences` and
   `dateWindow` (Projection=ALL). Existing P-A…P-E must pass unchanged.
+  (c) Add **P-G** `test_pagination_follows_last_evaluated_key_deterministically`
+  (§0 #10): replace `enumerator._watches_table` with a stub whose
+  `query` returns `{"Items":[rowA], "LastEvaluatedKey":{"k":1}}` on
+  call 1 and `{"Items":[rowB]}` on call 2; assert both rows yielded in
+  order and call 2 received `ExclusiveStartKey={"k":1}`. This is the
+  *contractual* pagination proof; P-D (renamed, real-moto 400-row) is
+  kept as a smoke but is no longer the only pagination evidence.
 - **GOTCHA**: the spy must wrap the *same* table object the generator
   uses (`enumerator._watches_table`), set up inside the `mock_aws`
-  context the `enumerator_module` fixture provides.
+  context the `enumerator_module` fixture provides. P-G's stub fully
+  replaces `query` so it does not depend on moto GSI fidelity at all.
 - **VALIDATE**: Gate 3.
 
 ### Task 4: add the GSI in `lib/data-stores.js` + flip the JSDoc
@@ -350,7 +379,16 @@ CDK synth in jest needs `'aws:cdk:bundling-stacks': []` context (mirror
   comment voice. (c) Also flip the `enumerator.py` module docstring +
   inner-method docstring (lines ~4-13, ~32-37) from Scan/"planned" to
   the built Query-on-GSI description (this pairs with Task 1; do it
-  here so the doc-flip is one reviewable unit).
+  here so the doc-flip is one reviewable unit). (d) §0 #15: in
+  `lambdas/travel-agent/watches.py` (~lines 95-115), rewrite the
+  "switch to a status GSI" recommendation on the per-user
+  `list_watches` path. It must NOT imply the just-built `status-index`
+  serves it — that index is `status`-PK only (cross-user poll). State
+  plainly: "The `status-index` GSI (ADR 0007) is poll-only (cross-user,
+  `status` PK); a per-user active-watch optimisation would need a
+  separate `userId`+`status` composite index — out of scope (ADR 0007
+  §NOT-building)." Touch only that comment; no `list_watches` logic
+  change.
 - **VALIDATE**: Gates 1, 4, 9.
 
 ### Task 5: author `docs/adr/0007-watches-status-gsi.md`
@@ -365,9 +403,20 @@ CDK synth in jest needs `'aws:cdk:bundling-stacks': []` context (mirror
   O(A) not O(N), full row in one read, no IAM/infra churn; **Cost:**
   GSI eventual consistency → new watch may wait one tick, sparse-index
   invariant is now load-bearing, single hot GSI partition is the
-  at-scale ceiling; **Not chosen — and why:** sharded/composite GSI PK,
-  base-table redesign, keeping Scan). `## Closes` trailer like 0006.
-  Then flip `docs/adr/README.md:14` row Status `Planned` → `Accepted`.
+  at-scale ceiling, **one-time GSI-backfill window** (§0 #9): the same
+  `cdk deploy` adds the index and flips the code to Query; while the
+  GSI backfills, a Query raises `ValidationException`. Document the
+  honest position — a fresh `RemovalPolicy.DESTROY` personal table
+  with ≤dozens of rows backfills near-instantly; a scheduled poll tick
+  landing in that window fails that tick only and self-heals next tick
+  (EventBridge re-fires; the poll is idempotent). Record the two-step
+  deploy (deploy GSI → wait `ACTIVE` → deploy enumerator) as the
+  zero-miss option for a populated table; **Not chosen — and why:**
+  sharded/composite GSI PK, base-table redesign, keeping Scan,
+  in-enumerator `ResourceNotFound`/`ValidationException` try-except
+  (untestable cruft for a one-time window — §9 #5)). `## Closes`
+  trailer like 0006. Then flip `docs/adr/README.md:14` row Status
+  `Planned` → `Accepted`.
 - **GOTCHA**: ADR prose is a durable artefact — no `slice`/`T#`/filler;
   "ADR 0007" and the `**Status:**` line are the *allowed* refs.
 - **VALIDATE**: Gates 8, 9.
@@ -380,11 +429,15 @@ CDK synth in jest needs `'aws:cdk:bundling-stacks': []` context (mirror
   WatchesTable's `GlobalSecondaryIndexes` (one `status-index`, KeySchema
   `status`/HASH, `Projection.ProjectionType==='ALL'`) and `status`/`S`
   in `AttributeDefinitions`. J-C: exactly one GSI on WatchesTable,
-  FareHistory has none. J-B: synth the full `StrandsAgentOnLambdaStack`
-  (Docker-skip context, like `budget-alarm.test.js` Group C) and assert
-  the poller function's `AWS::IAM::Policy` has a DDB statement whose
-  `Resource` array contains an entry whose last `Fn::Join` segment ends
-  `/index/*` (CDK `grantReadData` shape) — locking §0 #5.
+  FareHistory has none. J-B (§0 #12): synth the full
+  `StrandsAgentOnLambdaStack` (Docker-skip context, like
+  `budget-alarm.test.js` Group C); find the `AWS::IAM::Policy` whose
+  `Roles` references the **poller** function's role, and assert it has
+  a **single statement** whose `Action` includes `dynamodb:Query` and
+  whose `Resource` array contains **both** a Watches-table-ARN entry
+  **and** an entry whose `Fn::Join` tail is `/index/*`. Not "some
+  policy contains index/*" — the Query action, the table ARN, and the
+  index ARN must co-occur on the poller role's statement.
 - **GOTCHA**: cross-instance `Match` after `jest.resetModules()` —
   re-require `aws-cdk-lib`/`assertions` inside the full-stack test
   (the exact hazard `budget-alarm.test.js` Group C documents). Pin
@@ -399,8 +452,11 @@ CDK synth in jest needs `'aws:cdk:bundling-stacks': []` context (mirror
 | conftest GSI not added → every poller-fixture test that queries fails, OR added wrong → only `test_enumerator` checked | MED | MED | §0 #2; Gate 3 runs the **full** poller suite (all four fixtures), not just the enumerator file |
 | Stale "Scan" wording survives in docstrings/test names → durable-artefact rot | MED | LOW | §0 #7 + Task 3/4 explicitly rename + flip; Gate 9 greps for residual "Scan"/"planned"/"if this ever grows" |
 | Someone adds `ConsistentRead=True` "for safety" → boto3 `ValidationException` at runtime | LOW | MED | §0 #6 + §7 explicit "no ConsistentRead"; P-F exercises the real moto query path which would surface it |
-| Future hand-scoped poller grant breaks GSI Query (AccessDenied, runtime-only) | LOW | MED | Gate 5 / J-B locks the synthesised policy `Resource` to include `index/*` so the regression fails at synth |
-| `addGlobalSecondaryIndex` with a capacity block on a PAY_PER_REQUEST table → synth error | LOW | LOW | §7/§9 #2 explicitly: no `readCapacity`/`writeCapacity`; Gate 1 catches a synth error immediately |
+| Future hand-scoped poller grant breaks GSI Query (AccessDenied, runtime-only) | LOW | MED | §0 #12; Gate 5 / J-B locks `dynamodb:Query` + table-ARN + `index/*` co-occurring on the poller role so the regression fails at synth |
+| `addGlobalSecondaryIndex` with a capacity block on a PAY_PER_REQUEST table → synth error | LOW | LOW | §7/§9 #2: no `readCapacity`/`writeCapacity`. **Gate 4** (real `Template.fromStack` synth) is the backstop — Gate 1 only loads the module and does NOT catch this (§0 #13) |
+| moto returns all GSI-Query rows in one page → P-D proves nothing about pagination | MED | MED | §0 #10; P-G stubs `query` deterministically (page-with-key → page-without) so the `LastEvaluatedKey` loop is proven independent of moto fidelity |
+| Yield-order change breaks an unnoticed downstream order assumption | LOW | MED | §0 #11; §6 states order is non-contractual; `app.py` per-watch loop is independent (verified, §8); sorted-assert tests are intentional, not a blind spot |
+| Same-deploy GSI backfill window → poll tick(s) raise `ValidationException` until index `ACTIVE` | LOW | MED | §0 #9; ADR documents the near-instant fresh-table reality + self-healing scheduled retry + the two-step-deploy zero-miss option; no in-code try/except (one-time window, §9 #5) |
 
 ## What "done" looks like
 
