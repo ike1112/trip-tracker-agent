@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node-tests:
+    name: Node / CDK construct + MCP-server tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install root deps
+        run: npm install
+
+      - name: CDK construct tests
+        run: npx jest test/
+
+      - name: flights-mcp tests
+        run: npm install && npm test
+        working-directory: lambdas/flights-mcp
+
+      - name: hotels-mcp tests
+        run: npm install && npm test
+        working-directory: lambdas/hotels-mcp
+
+      - name: mcp-authorizer tests
+        run: npm install && npm test
+        working-directory: lambdas/mcp-authorizer
+
+  python-tests:
+    name: Python Lambda + evals tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned test environment
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements-test.txt
+
+      - name: poller
+        run: python -m pytest tests/ -q
+        working-directory: lambdas/poller
+
+      - name: notifier
+        run: python -m pytest tests/ -q
+        working-directory: lambdas/notifier
+
+      - name: travel-agent
+        run: python -m pytest tests/ -q
+        working-directory: lambdas/travel-agent
+
+      - name: evals
+        run: python -m pytest tests/ -q
+        working-directory: evals

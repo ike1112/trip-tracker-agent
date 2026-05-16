@@ -166,6 +166,11 @@ cd lambdas/notifier && ../../.venv-tests/Scripts/python.exe -m pytest tests/ -q
 Construct synth tests skip Docker bundling via the
 `aws:cdk:bundling-stacks: []` context.
 
+GitHub Actions ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml))
+runs the same suites on every push and pull request: the CDK construct
+tests, the MCP-server / authorizer Node suites, and the Python Lambda +
+evals suites against the pinned [`requirements-test.txt`](./requirements-test.txt).
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
