@@ -42,10 +42,13 @@ rewrite the poller's enumerator to Query it.
   No `ConsistentRead` — strongly-consistent reads are unsupported on a
   GSI.
 - **No IAM change.** `lib/poller-server.js` grants the poller
-  `grantReadData` on the Watches table; CDK already widens that policy's
-  `Resource` to include `<tableArn>/index/*` and the action set to
-  include `dynamodb:Query`. A bespoke grant would narrow nothing and
-  invite drift; a synth test locks the invariant instead.
+  `grantReadData` on the Watches table. The grant call itself is
+  unchanged; because the table now has a GSI, CDK's `grantReadData`
+  automatically extends the synthesised `Resource` to include
+  `<tableArn>/index/*` and adds `dynamodb:Query` to the action set —
+  the GSI causes the widening; it was not pre-existing. A bespoke
+  grant would narrow nothing and invite drift; a synth test locks the
+  invariant instead.
 - **Honest scope ceiling.** A `status`-only partition key is very low
   cardinality — every active row lands in one GSI partition. This is
   *less wrong* than Scan-all, not the production-correct design. At
@@ -64,7 +67,8 @@ rewrite the poller's enumerator to Query it.
 - The full row arrives in one read (Projection ALL) — no second fetch,
   no partial-row class of bug.
 - Zero infra/IAM churn: one `addGlobalSecondaryIndex` call; the existing
-  `grantReadData` already covers the index.
+  `grantReadData` call is unchanged, and CDK automatically widens its
+  synthesised policy to cover the index because the GSI is now present.
 
 **Costs / limits:**
 

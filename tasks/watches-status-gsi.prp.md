@@ -13,7 +13,7 @@ delete pre-baked entries — they are pinned by gates.
 | 2 | MED | `_create_tables` in `lambdas/poller/tests/conftest.py` is shared by **four** fixtures (`enumerator_module`, `app_module`, `history_window_module`, `writer_module`). The moto `WatchesTable` create must add `status` to `AttributeDefinitions` **and** a `GlobalSecondaryIndexes` block, or `table.query(IndexName=…)` raises `ResourceNotFoundException` in moto. Adding the GSI is backward-compatible (base KeySchema/billing unchanged; only the enumerator queries it). | §14 Task 2 updates `_create_tables`. Gate 3 = **full** poller suite green (all four fixtures), not just `test_enumerator.py`. |
 | 3 | MED | **Sparse-index semantics.** DynamoDB only projects an item into a GSI if it carries the GSI partition-key attribute. A Watches row written without a `status` attribute is invisible to the poller — and fails *silently* (no error, just never polled). Every current writer sets `status` (chat CRUD tools + `make_watch`), so this holds today, but it is now a hard invariant, not a convenience. | §14 Task 4 records it in ADR Consequences **and** the `data-stores.js` JSDoc as an explicit invariant: "every Watches row MUST carry a `status` attribute or the poller never sees it." No code guard (the schema already guarantees it; a guard would be untestable defensive cruft). |
 | 4 | LOW | After the rewrite `enumerator.py` no longer uses `Attr`; it uses `Key`. Leaving `from boto3.dynamodb.conditions import Attr` is dead code the cleanliness gate / a future lint would flag. | §14 Task 1 swaps the import to `Key` (verify no other `Attr` reference remains — there is none). |
-| 5 | LOW | GSI Query needs `dynamodb:Query` on the **index ARN** (`<tableArn>/index/status-index`). `lib/poller-server.js:130` uses `props.watchesTable.grantReadData(pollerFn)`; CDK's `grantReadData` already widens the policy `Resource` to include `<tableArn>/index/*`, so **no IAM change is required**. But a future hand-scoped grant would break GSI Query with `AccessDenied` only at runtime. | §14 Task 1 makes **no** IAM change. Gate 5 (new) synthesises the stack and asserts the poller's DDB policy `Resource` list contains an `index/*`-suffixed ARN, locking the invariant so a future regression fails at synth. |
+| 5 | LOW | GSI Query needs `dynamodb:Query` on the **index ARN** (`<tableArn>/index/status-index`). `lib/poller-server.js:130` uses `props.watchesTable.grantReadData(pollerFn)`; the grant call itself requires no change — because the table now has a GSI, CDK's `grantReadData` automatically extends the synthesised `Resource` to include `<tableArn>/index/*` and adds `dynamodb:Query` (the GSI causes the widening; it is not pre-existing). No IAM change is required. But a future hand-scoped grant would break GSI Query with `AccessDenied` only at runtime. | §14 Task 1 makes **no** IAM change. Gate 5 (new) synthesises the stack and asserts the poller's DDB policy `Resource` list contains an `index/*`-suffixed ARN, locking the invariant so a future regression fails at synth. |
 | 6 | LOW | A GSI cannot be queried with `ConsistentRead=True` (strongly-consistent reads are unsupported on GSIs — boto3 raises `ValidationException`). GSIs are also eventually consistent: a just-created "active" watch may miss the *immediately* following poll tick. | §14 Task 1 must **not** pass `ConsistentRead`. ADR Consequences documents the one-cycle latency as acceptable (the poller is scheduled; a brand-new watch waiting one tick is harmless and strictly cheaper than Scan-all). |
 | 7 | LOW | Query still 1 MB-paginates exactly like Scan — the `LastEvaluatedKey`/`ExclusiveStartKey` loop is unchanged. The existing `test_paginates_when_scan_returns_last_evaluated_key` name will be stale ("scan"). Renaming it is a durable-artifact accuracy fix, not optional. | §14 Task 3 renames it to `test_paginates_when_query_returns_last_evaluated_key` and updates the conftest/test docstrings that say "Scan". |
 | 8 | INFO (honest ceiling) | A `status`-only GSI partition key has very low cardinality — every active row shares **one** GSI partition. At scale this is a hot partition; it is *less wrong* than Scan-all, not the production-correct design (which would shard the GSI PK or use a different access pattern). | ADR Decision/Consequences states this explicitly and scopes the decision to personal scale — same honesty framing as the original Scan decision in `data-stores.js`. Not a defect; a documented boundary. |
@@ -78,8 +78,8 @@ One `addGlobalSecondaryIndex` on the existing `WatchesTable`
 ALL**, inherits PAY_PER_REQUEST — no throughput block). Rewrite the
 enumerator's import (`Attr`→`Key`) and the read loop (`scan`→`query`
 with `IndexName`), preserving the exact `LastEvaluatedKey` pagination.
-No IAM change (`grantReadData` already covers `index/*`). ADR + doc
-flips + tests.
+No IAM change (`grantReadData` is unchanged; CDK automatically covers
+`index/*` because the GSI is now present). ADR + doc flips + tests.
 
 ## 5. Metadata
 
@@ -229,10 +229,12 @@ may add citations but the behaviour is pinned by tests, not prose.
    of rows) is trivial.
 3. **No sort key on the GSI.** The poll wants every active row in any
    order. A sort key adds nothing and constrains nothing here.
-4. **No IAM change.** `grantReadData` (poller-server.js:130) already
-   emits `dynamodb:Query` + `<tableArn>/index/*`. Adding a bespoke
-   grant would *narrow nothing* and risk drift. Gate 5 locks the
-   invariant instead of changing code.
+4. **No IAM change.** `grantReadData` (poller-server.js:130) is
+   unchanged. Because the table now has a GSI, CDK automatically
+   extends the synthesised policy to emit `dynamodb:Query` +
+   `<tableArn>/index/*` — the GSI causes the widening, it is not
+   pre-existing. Adding a bespoke grant would *narrow nothing* and
+   risk drift. Gate 5 locks the invariant instead of changing code.
 5. **No code guard for the sparse-index invariant.** Every writer
    already sets `status` (schema-guaranteed). A runtime "row missing
    status" guard in the enumerator would be untestable against real
@@ -396,8 +398,9 @@ CDK synth in jest needs `'aws:cdk:bundling-stacks': []` context (mirror
   status GSI for the poller`, `**Date:** 2026-05-16`, `**Status:**
   Accepted`, `## Context` (the O(N)-Scan cost problem; quote the
   original `data-stores.js` Scan rationale it supersedes), `## Decision`
-  (the GSI shape from §7; ProjectionType=ALL rationale; no IAM change
-  because `grantReadData` covers `index/*`; **honest §0 #8 ceiling** —
+  (the GSI shape from §7; ProjectionType=ALL rationale; no IAM change —
+  `grantReadData` is unchanged, CDK automatically extends the policy to
+  cover `index/*` because the GSI is now present; **honest §0 #8 ceiling** —
   status-only PK is low-cardinality, less-wrong-than-Scan, personal
   scale, sharded PK is the future ADR), `## Consequences` (**Good:**
   O(A) not O(N), full row in one read, no IAM/infra churn; **Cost:**
