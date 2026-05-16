@@ -1,6 +1,7 @@
 {
   "name": "strands-agent-on-lambda",
   "version": "0.1.0",
+  "license": "MIT",
   "bin": {
     "strands-agent-on-lambda": "bin/strands-agent-on-lambda.js"
   },
