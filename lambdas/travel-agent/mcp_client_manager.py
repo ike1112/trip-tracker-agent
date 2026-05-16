@@ -147,8 +147,10 @@ def get_mcp_tools_for_user(user: User):
     # ("travel-agent") and the end user. Every verifier validates this token
     # and couples sub=travel-agent to the agent's own secret (ADR 0006), so
     # it can apply user-specific policies (e.g. travel budget limits).
-    # 5-minute TTL mirrors the poller's signer — a leaked token expires fast
-    # instead of living forever (verifiers enforce exp when present).
+    # 5-minute TTL mirrors the poller's signer — a leaked token expires
+    # fast instead of living forever. Every verifier rejects a token with
+    # no exp (absence is a denial, not a free pass), so omitting this
+    # would lock the agent out, not create an eternal token.
     now = int(time.time())
     token = jwt.encode({
         "sub": "travel-agent",

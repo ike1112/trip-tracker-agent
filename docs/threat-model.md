@@ -61,8 +61,8 @@ its own handler as defense in depth (slice 3, `lambdas/flights-mcp/index.js`).
 
 | Secret | Where it lives | Lifetime | Notes |
 |---|---|---|---|
-| Agent JWT signer | Secrets Manager (`trip-tracker-agent-jwt-signer`); read by the agent minter + both MCP verifier sites | Manual rotation (console + redeploy) | Per-component secret, `sub: travel-agent`. No value in the repo (ADR 0006, commit pending). |
-| Poller JWT signer | Secrets Manager (`trip-tracker-poller-jwt-signer`); read by the poller minter + both MCP verifier sites | Manual rotation (console + redeploy) | Per-component secret, `sub: trip-tracker-poller`. Replaces the shared hard-coded literal (ADR 0006, commit pending). |
+| Agent JWT signer | Secrets Manager (`trip-tracker-agent-jwt-signer`); read by the agent minter + both MCP verifier sites | Manual rotation (console + redeploy) | Per-component secret, `sub: travel-agent`. No value in the repo (ADR 0006). |
+| Poller JWT signer | Secrets Manager (`trip-tracker-poller-jwt-signer`); read by the poller minter + both MCP verifier sites | Manual rotation (console + redeploy) | Per-component secret, `sub: trip-tracker-poller`. Replaces the shared hard-coded literal (ADR 0006). |
 | Cognito signing keys | Cognito-managed (JWKS endpoint) | Rotated by Cognito | Public keys only on our side. |
 | `DUFFEL_API_KEY` | Lambda env var, flights-mcp only | Rotated by hand at the provider | Only present if `MCP_MODE=live`. Fixture deploys leave it empty. |
 | `LITEAPI_API_KEY` | Same pattern (slice 4) | | |
@@ -162,11 +162,15 @@ the alert decision.
 | Reflected MCP error body leaks reflected request fragments to logs | The `watch_errored` log explicitly omits `e.body`; only the categorised `reason` + HTTP status are surfaced. Verified by `test_handler_with_mcp.py::test_watch_errored_log_does_not_carry_response_body`. |
 | Concurrent EventBridge ticks fan out parallel pollers | Lambda `reservedConcurrentExecutions = 1` queues a second invocation rather than running it. Free defence against accidental cron-config drift. |
 
-**What would change for production:** per-component JWT signing secrets
-(ADR 0006 in slice 9) so a compromised poller cannot mint tokens that
-look like the agent and vice versa; per-watch IAM scoping if multi-tenant
-work ever lands; a poller-specific X-Ray service map node so the cron
-trace is independently visible from the chat path.
+**Done (ADR 0006):** per-component JWT signing secrets + per-component
+`sub`, so a compromised poller cannot mint tokens that look like the
+agent and vice versa.
+
+**What would still change for production:** an automatic secret-rotation
+Lambda (rotation is manual console + redeploy today); per-watch IAM
+scoping if multi-tenant work ever lands; a poller-specific X-Ray
+service-map node so the cron trace is independently visible from the
+chat path.
 
 ### [6] Poller → Bedrock InvokeModel
 
@@ -285,8 +289,8 @@ These are real risks the codebase does not address, by design for v1:
   `lib/strands-agent-on-lambda-stack.js`; the agent and poller now sign
   with separate Secrets Manager secrets and distinct `sub` claims, and
   every verifier (MCP authorizer + both MCP server handlers) couples
-  each secret to its allowed `sub`. Supersedes the slice-5 entry's
-  "triple-tracked … will resolve it" note. The agent's
+  each secret to its allowed `sub`. Supersedes the 2026-05-10
+  change-log entry's "triple-tracked … will resolve it" note. The agent's
   `bedrock:InvokeModel*` `Resource: '*'` grant is also closed —
   scoped to the 3 US geographic-profile destination foundation-model
   ARNs + the inference-profile ARN. ADR 0006 documents the design.
