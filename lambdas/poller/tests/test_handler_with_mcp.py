@@ -329,9 +329,9 @@ def test_token_with_wrong_sub_rejected_by_authorizer_path(app_module, monkeypatc
         watches.put_item(Item=make_watch("u-x", "w1", destination="Tokyo"))
         result = app.handler({}, None)
 
-    # Mock rejects sub != travel-agent with 401 — the call still hits the
-    # server (so server records the call) but the response status is 401
-    # so the poller treats it as `watch_errored`.
+    # Mock rejects sub != trip-tracker-poller with 401 — the call still
+    # hits the server (so server records the call) but the response status
+    # is 401 so the poller treats it as `watch_errored`.
     assert len(fl_srv.calls) == 1
     assert result == {"watches_polled": 1, "watches_errored": 1}
 

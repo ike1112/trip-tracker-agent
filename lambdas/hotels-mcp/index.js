@@ -56,9 +56,11 @@ const SECRET_SUBS = [
 
 async function verifyTwoSecret(token) {
     for (const [envVar, allowedSub] of SECRET_SUBS) {
-        // Fetch OUTSIDE the try: a Secrets Manager / KMS failure is an
-        // infra error, not an auth failure — it must propagate so it
-        // alarms separately instead of masquerading as a generic deny.
+        // Fetch OUTSIDE the verify try: a Secrets Manager / KMS failure
+        // is an infra error, not a bad signature. It still fails closed
+        // (the handler's catch denies), but it surfaces with its own
+        // error message instead of being laundered into the generic
+        // "no candidate secret verified" deny — so the two alarm apart.
         const secret = await getSecret(envVar);
         let claims;
         try {

@@ -136,3 +136,20 @@ test('F8 valid secret + sub but no exp claim returns 401 (expiry enforced)', asy
     });
     assert.equal(resp.statusCode, 401);
 });
+
+// Real guard for the { algorithms: ['HS256'] } pin: a HS384 token signed
+// with the correct secret + sub is rejected ONLY because the pin
+// excludes HS384. Drop or widen the pin and this goes 200.
+test('F9 HS384 token (valid secret + sub) returns 401 (algorithm pin guard)', async () => {
+    seed();
+    const token = jwt.sign(
+        { sub: 'travel-agent', user_id: 'test-user', user_name: 'Tester' },
+        AGENT_SECRET,
+        { algorithm: 'HS384', expiresIn: '5m' },
+    );
+    const resp = await handler({
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', params: {}, id: 1 }),
+    });
+    assert.equal(resp.statusCode, 401);
+});

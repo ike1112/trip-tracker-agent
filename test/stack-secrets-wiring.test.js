@@ -82,23 +82,59 @@ describe('Group B — stack secret wiring', () => {
         }
     });
 
-    test('B7 flights+hotels server Lambdas can read both secrets (GetSecretValue present)', () => {
-        // Two secrets × two server Lambdas → the policy doc must carry
-        // secretsmanager:GetSecretValue statements (resource-scoped, not *).
-        let getSecretStmts = 0;
-        for (const r of Object.values(tmpl.Resources || {})) {
-            if (r.Type !== 'AWS::IAM::Policy') continue;
-            for (const s of r.Properties?.PolicyDocument?.Statement || []) {
-                const actions = Array.isArray(s.Action) ? s.Action : [s.Action];
-                if (actions.some((a) => typeof a === 'string' && a.startsWith('secretsmanager:GetSecretValue'))) {
-                    getSecretStmts += 1;
+    // Per-Lambda grant assertion, not a stack-wide floor count: resolve
+    // each secret-reading Lambda → its role → the IAM policies on that
+    // role, and assert a GetSecretValue statement exists. A floor count
+    // stays green if one Lambda loses its grant while another gains one;
+    // this catches the specific Lambda losing it.
+    test('B7 every secret-reading Lambda has a GetSecretValue grant on its own role', () => {
+        const resources = tmpl.Resources || {};
+
+        // Map each Lambda function name → its role's logical id.
+        const roleOfFn = (fnName) => {
+            const fn = fnByName(fnName);
+            const roleArn = fn?.Properties?.Role; // { 'Fn::GetAtt': [RoleLogicalId, 'Arn'] }
+            return roleArn?.['Fn::GetAtt']?.[0] ?? null;
+        };
+        // Does any IAM policy bound to roleLogicalId carry GetSecretValue
+        // (resource-scoped, never '*')?
+        const roleHasGetSecret = (roleLogicalId) => {
+            for (const r of Object.values(resources)) {
+                if (r.Type !== 'AWS::IAM::Policy') continue;
+                const boundRoles = (r.Properties?.Roles || []).map((x) => x?.Ref);
+                if (!boundRoles.includes(roleLogicalId)) continue;
+                for (const s of r.Properties?.PolicyDocument?.Statement || []) {
+                    const actions = Array.isArray(s.Action) ? s.Action : [s.Action];
+                    if (actions.some((a) => typeof a === 'string' && a.startsWith('secretsmanager:GetSecretValue'))) {
+                        const res = Array.isArray(s.Resource) ? s.Resource : [s.Resource];
+                        expect(res).not.toContain('*');
+                        return true;
+                    }
                 }
             }
+            return false;
+        };
+
+        const secretReaders = [
+            'travel-agent-on-lambda',
+            'flights-mcp-server',
+            'flights-mcp-server-authorizer',
+            'hotels-mcp-server',
+            'hotels-mcp-server-authorizer',
+        ];
+        for (const fnName of secretReaders) {
+            const role = roleOfFn(fnName);
+            expect(role).toBeTruthy();
+            expect(roleHasGetSecret(role)).toBe(true);
         }
-        // agent(1) + poller(1) + flights server+authorizer(2) + hotels
-        // server+authorizer(2), each reading 1-2 secrets. At minimum the
-        // server Lambdas contribute, so there must be several.
-        expect(getSecretStmts).toBeGreaterThanOrEqual(6);
+        // The poller reads its secret too; it has no fixed FunctionName
+        // assertion above, so check by name pattern.
+        const poller = allLambdas().find(
+            (r) => /poller/i.test(JSON.stringify(r.Properties.FunctionName || '')),
+        );
+        const pollerRole = poller?.Properties?.Role?.['Fn::GetAtt']?.[0];
+        expect(pollerRole).toBeTruthy();
+        expect(roleHasGetSecret(pollerRole)).toBe(true);
     });
 
     test('B8 agent Lambda has AGENT_BEDROCK_MODEL_ID', () => {
