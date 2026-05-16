@@ -97,8 +97,8 @@ today — ADR 0006).
 
 | Threat | Mitigation |
 |---|---|
-| Calling MCP from outside the agent | HS256 JWT required at API GW; `sub` must equal `travel-agent`. Authorizer denies otherwise. |
-| Tampered internal JWT | HS256 signature verification (constant-time compare) in both the authorizer and the MCP Lambda. |
+| Calling MCP from outside the agent | Per-component HS256 JWT required (ADR 0006). The verifier couples each secret to its allowed `sub` — `travel-agent` under the agent secret, `trip-tracker-poller` under the poller secret — and denies any cross-sub or foreign-secret token. Enforced identically at the API-GW authorizer AND in-handler at both MCP servers. |
+| Tampered / forged internal JWT | Signature verification pinned to `algorithms: ['HS256']` (blocks `alg:none` and RS/HS confusion explicitly, not by library default); tokens without `exp` are rejected (expiry enforced at the boundary, not assumed from the minter). Applied in all three verifier sites. |
 | Token leak via logs | The agent never logs the full token; the MCP Lambda logs `user_id_prefix` (first 8 chars) only. |
 | MCP server impersonation | The agent calls a CDK-output URL, not user-supplied. Endpoint env vars are stack-injected. |
 

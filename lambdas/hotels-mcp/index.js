@@ -56,14 +56,25 @@ const SECRET_SUBS = [
 
 async function verifyTwoSecret(token) {
     for (const [envVar, allowedSub] of SECRET_SUBS) {
+        // Fetch OUTSIDE the try: a Secrets Manager / KMS failure is an
+        // infra error, not an auth failure — it must propagate so it
+        // alarms separately instead of masquerading as a generic deny.
+        const secret = await getSecret(envVar);
         let claims;
         try {
-            claims = jwt.verify(token, await getSecret(envVar));
+            // Pin HS256 explicitly — don't rely on the library default
+            // to block alg=none / RS-HS confusion (defense in depth).
+            claims = jwt.verify(token, secret, { algorithms: ['HS256'] });
         } catch {
             continue; // wrong secret / expired / malformed — try the next
         }
+        // Enforce expiry at the boundary: a token minted without exp
+        // must not be treated as eternal just because a minter slipped.
+        if (claims.exp === undefined) continue;
         if (claims.sub === allowedSub) return claims;
-        throw new Error(`sub=${claims.sub} not allowed for this secret`);
+        // Verified under this secret but wrong sub: cross-sub forgery.
+        // Do not echo the attacker-influenced sub into the log line.
+        throw new Error('sub not allowed for this secret');
     }
     throw new Error('no candidate secret verified the token');
 }

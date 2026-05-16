@@ -19,8 +19,12 @@ function seed() {
     });
 }
 
+// Real minters always set exp (poller jwt_signer + agent
+// mcp_client_manager); mirror that so the happy-path tests reflect
+// production. D8 overrides with a negative expiry; D10 signs without
+// this helper to exercise the missing-exp path.
 function sign(secret, claims, opts = {}) {
-    return jwt.sign({ user_id: 'u1', user_name: 'alice', ...claims }, secret, opts);
+    return jwt.sign({ user_id: 'u1', user_name: 'alice', ...claims }, secret, { expiresIn: '5m', ...opts });
 }
 
 async function effectFor(authorizationToken) {
@@ -64,5 +68,16 @@ test('D7 missing authorization token => Deny', async () => {
 
 test('D8 expired token => Deny', async () => {
     const tok = sign(AGENT_SECRET, { sub: 'travel-agent' }, { expiresIn: -10 });
+    assert.equal(await effectFor(`Bearer ${tok}`), 'Deny');
+});
+
+test('D9 alg=none forged token => Deny (HS256 pinned)', async () => {
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const forged = `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: 'travel-agent', user_id: 'u', exp: 9999999999 })}.`;
+    assert.equal(await effectFor(`Bearer ${forged}`), 'Deny');
+});
+
+test('D10 valid secret + sub but no exp claim => Deny (expiry enforced at boundary)', async () => {
+    const tok = jwt.sign({ sub: 'travel-agent', user_id: 'u', user_name: 'n' }, AGENT_SECRET); // no expiresIn
     assert.equal(await effectFor(`Bearer ${tok}`), 'Deny');
 });

@@ -24,8 +24,11 @@ function seed() {
 
 function _event({ method, params = {}, id = 1, signed = true, secret = AGENT_SECRET, sub = 'travel-agent' }) {
     seed();
+    // Real minters always set exp; mirror that (the verifier now
+    // rejects tokens with no exp). F7 (expired) and F8 (no exp) sign
+    // directly to exercise those paths.
     const token = signed
-        ? jwt.sign({ sub, user_id: 'test-user', user_name: 'Tester' }, secret)
+        ? jwt.sign({ sub, user_id: 'test-user', user_name: 'Tester' }, secret, { expiresIn: '5m' })
         : 'not.a.real.token';
     return {
         headers: { Authorization: `Bearer ${token}` },
@@ -113,6 +116,19 @@ test('F7 expired token (valid secret + sub) returns 401', async () => {
         { sub: 'travel-agent', user_id: 'test-user', user_name: 'Tester' },
         AGENT_SECRET,
         { expiresIn: -10 },
+    );
+    const resp = await handler({
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', params: {}, id: 1 }),
+    });
+    assert.equal(resp.statusCode, 401);
+});
+
+test('F8 valid secret + sub but no exp claim returns 401 (expiry enforced)', async () => {
+    seed();
+    const token = jwt.sign(
+        { sub: 'travel-agent', user_id: 'test-user', user_name: 'Tester' },
+        AGENT_SECRET, // no expiresIn → no exp claim
     );
     const resp = await handler({
         headers: { Authorization: `Bearer ${token}` },

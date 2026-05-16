@@ -47,6 +47,14 @@ fix has to cover all three verifier sites, not just the authorizer.
   two MCP server handlers read both secret ARNs; the minters read only
   their own.
 
+- **The verifier enforces its own invariants, not minter discipline.**
+  `jwt.verify` is pinned to `{ algorithms: ['HS256'] }` (blocking
+  `alg:none` and RS/HS confusion explicitly, not by library default),
+  and a token with no `exp` claim is rejected (expiry is enforced at
+  the boundary, not assumed because the minter set it). A Secrets
+  Manager fetch failure propagates as an infra error rather than being
+  laundered into a generic auth-deny, so it alarms separately.
+
 - **HS256 with two secrets, not RS256.** Asymmetric keys would force
   every minter to ship a private-key library and every verifier to hold
   a public-key cache or fetch JWKS. Disproportionate at single-developer
@@ -75,6 +83,11 @@ fix has to cover all three verifier sites, not just the authorizer.
   ARN (4 ARNs), replacing the previous `Resource: '*'`. The model id is
   injected via `AGENT_BEDROCK_MODEL_ID` from the same CDK context value
   that derives the ARNs, so the grant and the invoked model cannot drift.
+  The context value is **format-validated at synth**
+  (`/^us\.[a-z0-9-]+\.[a-z0-9.:-]+$/`) — a non-`us.` profile or a value
+  with ARN metacharacters (e.g. `agentBedrockModelId=us.*`, which would
+  otherwise synthesise `foundation-model/*` and reopen the very wildcard
+  this ADR closes) fails loud at synth, not silently at runtime.
 
 - **Rotation is manual in v1.** No rotation Lambda. To rotate: put a new
   `SecretString` on the secret in the AWS console, then redeploy (or

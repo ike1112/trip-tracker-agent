@@ -121,6 +121,11 @@ describe('Agent Bedrock IAM grant', () => {
 
     test('C8 non-us. geographic profile throws at synth (loud, not malformed ARNs)', () => {
         expect(() => synth({ agentBedrockModelId: 'eu.anthropic.claude-3-5-sonnet-20241022-v1:0' }))
-            .toThrow(/not a us\. geographic/);
+            .toThrow(/not a valid us\. geographic/);
+    });
+
+    test('C9 wildcard / ARN-injection model id throws at synth (no foundation-model/*)', () => {
+        expect(() => synth({ agentBedrockModelId: 'us.*' })).toThrow(/not a valid/);
+        expect(() => synth({ agentBedrockModelId: 'us.anthropic.x/*' })).toThrow(/not a valid/);
     });
 });
