@@ -96,6 +96,51 @@ describe('BudgetAlarmConstruct — Group A: email validation', () => {
         expect(build(undefined, 'not-an-email'))
             .toThrow(/^notifierRecipientEmail is required and must look like an email/);
     });
+
+    // Security-axis regression pins. The address resolved here flows into
+    // a CloudFormation AWS::Budgets::Budget Subscriber.address that AWS
+    // delivers to via SES/SNS. These lock the two properties a future
+    // "regex improvement" could silently regress.
+
+    test('A7 rejects header/CRLF injection that JS-$ (no /m) must keep out', () => {
+        // notifier-server.js (ADR 0005) relies on JS `$` matching ONLY the
+        // absolute end of string (unlike Python `$`, which matches before
+        // a trailing \n). If EMAIL_PATTERN ever gained the /m flag or a
+        // \r/\n was added to a character class, an attacker-shaped value
+        // could smuggle a second header line into the budget subscriber.
+        // Each of these is a syntactically-valid email with an injected
+        // line break + payload appended — all must fail synth-time.
+        for (const evil of [
+            'foo@bar.com\r\nBcc: evil@x.com',
+            'foo@bar.com\nBcc: evil@x.com',
+            'foo@bar.com\r',
+            'foo@bar.com\n',
+            'foo@bar.comevil@x.com', // NEL — not an ASCII line break, still must fail (not [A-Za-z])
+        ]) {
+            expect(build(evil)).toThrow(/budgetAlarmEmail/);
+        }
+    });
+
+    test('A8 EMAIL_PATTERN is not ReDoS-vulnerable on adversarial local/domain runs', () => {
+        // The nested quantifiers (\.[set]+)* / (\.[grp])* are safe only
+        // because each repeating group is prefixed by a mandatory literal
+        // "." disjoint from its character class — no ambiguous overlap to
+        // backtrack across. A future widening that let "." into a class
+        // would make this catastrophic. 40k-char adversarial inputs must
+        // resolve in well under a second (linear, not exponential).
+        const cases = [
+            'a'.repeat(40000) + '!',                 // long local, fails @
+            'a.'.repeat(20000) + 'a!',               // many local dot-groups, fail
+            'a@' + 'a.'.repeat(20000) + '!',         // many domain dot-groups, fail
+            'a@' + 'a-'.repeat(20000) + 'a',         // long hyphen run, no TLD
+        ];
+        for (const evil of cases) {
+            const t0 = process.hrtime.bigint();
+            expect(build(evil)).toThrow(/budgetAlarmEmail/);
+            const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+            expect(ms).toBeLessThan(1000);
+        }
+    });
 });
 
 describe('BudgetAlarmConstruct — Group B: synthesised budget shape', () => {
