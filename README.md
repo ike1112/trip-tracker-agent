@@ -61,6 +61,10 @@ session store, Secrets Manager wiring, cross-cutting CloudWatch /
 Budgets): [`docs/architecture.drawio`](./docs/architecture.drawio) —
 open in [draw.io](https://draw.io) or the VS Code Draw.io extension.
 
+For the full system guide — personas, user stories, user flows, and
+end-to-end sequence diagrams — see
+[`docs/SYSTEM.md`](./docs/SYSTEM.md).
+
 **Components**
 
 | Path | Role |
