@@ -56,6 +56,11 @@ You ──chat──> Web UI (Cognito-gated) ──JWT──> API Gateway
                           Notifier Lambda ──> SES email (ADR 0005)
 ```
 
+Full-fidelity diagram with AWS service icons (3 API Gateways, S3
+session store, Secrets Manager wiring, cross-cutting CloudWatch /
+Budgets): [`docs/architecture.drawio`](./docs/architecture.drawio) —
+open in [draw.io](https://draw.io) or the VS Code Draw.io extension.
+
 **Components**
 
 | Path | Role |
