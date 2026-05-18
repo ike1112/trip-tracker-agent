@@ -94,8 +94,10 @@ def on_gradio_app_load(request: gr.Request):
     return f"Logout ({request.username})", [gr.ChatMessage(
         role="assistant",
         content=(
-            f"Hi {request.username}, I'm your friendly corporate travel agent! "
-            "I'm here to make booking your next business trip easier. Tell me how I can help. "
+            f"Hi {request.username}, I track trip prices for you. "
+            "Describe a trip — origin, destination, dates, nights, budget — "
+            "and I'll watch the combined flight + hotel cost and alert you "
+            "when it's worth booking. What trip should I watch? "
         )
     )]
 
@@ -105,7 +107,7 @@ def on_gradio_app_load(request: gr.Request):
 # ---------------------------------------------------------------------------
 with gr.Blocks() as gradio_app:
     # Page title shown above the chat interface
-    header = gr.Markdown("Welcome to AcmeCorp Travel Agent")
+    header = gr.Markdown("Trip Tracker — combined flight + hotel price watch")
 
     # Collapsible section that shows the system architecture diagram
     with gr.Accordion("Architecture (click to open)", open=False):
@@ -117,9 +119,9 @@ with gr.Blocks() as gradio_app:
         type="messages",
         chatbot=gr.Chatbot(
             type="messages",
-            label="Book your next business trip with ease",
+            label="Track a trip's flight + hotel price over time",
             avatar_images=(user_avatar, bot_avatar),
-            placeholder="<b>Welcome to the AcmeCorp Travel Agent.</b>"
+            placeholder="<b>Trip Tracker</b> — describe a trip and I'll watch its price."
         )
     )
 
