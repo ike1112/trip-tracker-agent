@@ -5,3 +5,6 @@ itsdangerous==2.2.0
 uvicorn==0.34.3
 authlib==1.6.0
 dotenv==0.9.9
+# gradio 5.33.2 imports `requests` on its CLI path at startup but does not
+# declare it; without this the web app crashes on `import gradio`.
+requests==2.32.3

@@ -1,53 +1,44 @@
 #!/bin/sh
+# Post-deploy helper: set the demo users' passwords and write web/.env from
+# the deployed stack's CloudFormation outputs.
+#
+# The stack's CfnOutputs do NOT set ExportName, so they must be looked up by
+# OutputKey (a generated name like "CognitoCognitoUserPoolId0B9F70D4"), not
+# by export. We match on a stable OutputKey *substring* and take the first
+# hit, which is unique for each value below.
+set -e
 DST_FILE_NAME="./web/.env"
 STACK_NAME="StrandsAgentOnLambdaStack"
 
-echo STACK_NAME=$STACK_NAME
-echo "> Setting user passwords for Alice and Bob"
-COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query "Stacks[0].Outputs[?ExportName=='CognitoUserPoolId'].OutputValue" \
-    --output text)
+# get_output <OutputKey substring> — prints the matching output value.
+get_output() {
+    aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" \
+        --query "Stacks[0].Outputs[?contains(OutputKey, '$1')]|[0].OutputValue" \
+        --output text
+}
+
+echo "STACK_NAME=$STACK_NAME"
+
+echo "> Setting passwords for Alice and Bob"
+COGNITO_USER_POOL_ID=$(get_output UserPoolId)
+if [ -z "$COGNITO_USER_POOL_ID" ] || [ "$COGNITO_USER_POOL_ID" = "None" ]; then
+    echo "ERROR: could not resolve the Cognito user pool id from stack" \
+         "'$STACK_NAME'. Is it deployed in this account/region?" >&2
+    exit 1
+fi
 echo "COGNITO_USER_POOL_ID=\"$COGNITO_USER_POOL_ID\""
-aws cognito-idp admin-set-user-password --user-pool-id $COGNITO_USER_POOL_ID --username Alice --password "Passw0rd@" --permanent
-aws cognito-idp admin-set-user-password --user-pool-id $COGNITO_USER_POOL_ID --username Bob --password "Passw0rd@" --permanent
+aws cognito-idp admin-set-user-password --user-pool-id "$COGNITO_USER_POOL_ID" --username Alice --password "Passw0rd@" --permanent
+aws cognito-idp admin-set-user-password --user-pool-id "$COGNITO_USER_POOL_ID" --username Bob   --password "Passw0rd@" --permanent
 
-echo "> Injecting exports into $DST_FILE_NAME"
-echo "" > $DST_FILE_NAME
-COGNITO_SIGNIN_URL=$(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query "Stacks[0].Outputs[?ExportName=='CognitoSignInUrl'].OutputValue" \
-    --output text)
-echo "COGNITO_SIGNIN_URL=\"$COGNITO_SIGNIN_URL\"" >> $DST_FILE_NAME
+echo "> Writing $DST_FILE_NAME"
+{
+    echo "COGNITO_SIGNIN_URL=\"$(get_output SignInUrl)\""
+    echo "COGNITO_LOGOUT_URL=\"$(get_output LogoutUrl)\""
+    echo "COGNITO_WELL_KNOWN_URL=\"$(get_output WellKnownUrl)\""
+    echo "COGNITO_CLIENT_ID=\"$(get_output ClientId)\""
+    echo "COGNITO_CLIENT_SECRET=\"$(get_output ClientSecret)\""
+    echo "AGENT_ENDPOINT_URL=\"$(get_output AgentEndpointUrl)\""
+} > "$DST_FILE_NAME"
 
-COGNITO_LOGOUT_URL=$(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query "Stacks[0].Outputs[?ExportName=='CognitoLogoutUrl'].OutputValue" \
-    --output text)
-echo "COGNITO_LOGOUT_URL=\"$COGNITO_LOGOUT_URL\"" >> $DST_FILE_NAME
-
-COGNITO_WELL_KNOWN_URL=$(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query "Stacks[0].Outputs[?ExportName=='CognitoWellKnownUrl'].OutputValue" \
-    --output text)
-echo "COGNITO_WELL_KNOWN_URL=\"$COGNITO_WELL_KNOWN_URL\"" >> $DST_FILE_NAME
-
-COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query "Stacks[0].Outputs[?ExportName=='CognitoClientId'].OutputValue" \
-    --output text)
-echo "COGNITO_CLIENT_ID=\"$COGNITO_CLIENT_ID\"" >> $DST_FILE_NAME
-
-COGNITO_CLIENT_SECRET=$(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query "Stacks[0].Outputs[?ExportName=='CognitoClientSecret'].OutputValue" \
-    --output text)
-echo "COGNITO_CLIENT_SECRET=\"$COGNITO_CLIENT_SECRET\"" >> $DST_FILE_NAME
-
-AGENT_ENDPOINT_URL=$(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query "Stacks[0].Outputs[?ExportName=='AgentEndpointUrl'].OutputValue" \
-    --output text)
-echo "AGENT_ENDPOINT_URL=\"$AGENT_ENDPOINT_URL\"" >> $DST_FILE_NAME
-
-cat $DST_FILE_NAME
+cat "$DST_FILE_NAME"

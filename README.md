@@ -133,8 +133,15 @@ values handy, then expand them onto the deploy command. A fixture/stub
 deploy needs **no** external API keys:
 
 ```bash
-# Cost-free dry run — MCP fixture responses, Bedrock stub, no SES send:
-cdk deploy -c bedrockMode=stub -c sesMode=stub
+# Cost-free dry run — MCP fixture responses, Bedrock stub, no SES send.
+# notifierSenderEmail/notifierRecipientEmail are validated at synth even
+# in stub mode, so they are required here too (no email is ever sent).
+# The agent's own Bedrock model is NOT stubbed — enable model access for
+# the agent model in your deploy region (see Prerequisites) or the first
+# chat returns AccessDeniedException.
+cdk deploy -c bedrockMode=stub -c sesMode=stub \
+           -c notifierSenderEmail=you@example.com \
+           -c notifierRecipientEmail=you@example.com
 
 # Full live deploy — real flight/hotel prices, real Bedrock call, real SES:
 cdk deploy -c mcpMode=live -c duffelApiKey=… -c liteApiKey=… \
