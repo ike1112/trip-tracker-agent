@@ -58,8 +58,10 @@ You ──chat──> Web UI (Cognito-gated) ──JWT──> API Gateway
 
 Complete architecture — every AWS service, all 8 Lambdas with their
 tools, both data flows, and the trust boundaries, as diffable ASCII:
-[`docs/architecture.md`](./docs/architecture.md). Icon version (draw.io):
-[`docs/architecture.drawio`](./docs/architecture.drawio).
+[`docs/architecture.md`](./docs/architecture.md). Icon version (draw.io), current:
+[`docs/architecture-v2.drawio`](./docs/architecture-v2.drawio) — every
+service, per-Lambda tool lists, both flows. (`architecture.drawio` is the
+prior revision, kept for history.)
 
 For the full system guide — personas, user stories, user flows, and
 end-to-end sequence diagrams — see
