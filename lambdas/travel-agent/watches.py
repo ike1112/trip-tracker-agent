@@ -23,6 +23,7 @@ behind keeping `user_id` out of the tool schema entirely.
 import os
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional, Any
 
 import boto3
@@ -55,6 +56,28 @@ def _now_iso() -> str:
 # code path that accepts a watchId without also requiring the matching userId.
 # ---------------------------------------------------------------------------
 
+
+def _decimalize(value: Any) -> Any:
+    """Coerce floats to Decimal(str(x)) for DynamoDB, recursing containers.
+
+    boto3's DynamoDB resource rejects native Python floats
+    ("Float types are not supported. Use Decimal types instead.").
+    The agent's tool args arrive as floats (e.g. maxTotalPrice from the
+    LLM), so every numeric value bound for a write must be coerced. Uses
+    Decimal(str(x)) — never Decimal(float) — so 1500.0 stays 1500, not
+    1499.9999…, matching the poller/notifier convention. Bools are left
+    alone (bool is an int subclass; not a DDB float hazard).
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {k: _decimalize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_decimalize(v) for v in value]
+    return value
+
 def create_watch(
     user_id: str,
     origin: Any,
@@ -85,7 +108,7 @@ def create_watch(
         "createdAt": now,
         "updatedAt": now,
     }
-    _watches_table.put_item(Item=item)
+    _watches_table.put_item(Item=_decimalize(item))
     logger.info(
         "watch_created",
         extra={"watch_id": watch_id, "user_id_prefix": user_id[:8]},
@@ -132,7 +155,7 @@ def update_watch(
     sets["updatedAt"] = _now_iso()
 
     expr_names = {f"#k{i}": k for i, k in enumerate(sets)}
-    expr_values = {f":v{i}": v for i, v in enumerate(sets.values())}
+    expr_values = {f":v{i}": _decimalize(v) for i, v in enumerate(sets.values())}
     set_clause = ", ".join(f"#k{i} = :v{i}" for i in range(len(sets)))
 
     try:
