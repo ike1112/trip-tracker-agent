@@ -136,6 +136,22 @@ export const handler = async (event) => {
         return _badRequest('empty_body');
     }
 
+    // MCP Streamable HTTP: a JSON-RPC *notification* (a message with a
+    // `method` but no `id`, e.g. the `notifications/initialized` the
+    // streamable-http client sends right after `initialize`) expects no
+    // reply — the spec says ack with 202 Accepted and an empty body.
+    // The MCP Protocol layer only calls transport.send() for requests,
+    // so awaiting transport.dispatch() on a notification never settles
+    // and the Lambda is killed mid-promise (Runtime.NodeJsExit -> API
+    // Gateway 502). The server is stateless per invocation, so an
+    // inbound notification needs no processing — ack and return.
+    const _hasId = Object.prototype.hasOwnProperty.call(rpc, 'id')
+        && rpc.id !== null && rpc.id !== undefined;
+    if (typeof rpc.method === 'string' && !_hasId) {
+        logger.info('mcp_notification_ack', { method: rpc.method });
+        return { statusCode: 202, body: '' };
+    }
+
     // Build a fresh server + transport pair per invocation. Stateless.
     const server = createMcpServer();
     const transport = new LambdaTransport();
