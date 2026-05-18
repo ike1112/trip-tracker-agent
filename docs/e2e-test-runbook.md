@@ -260,6 +260,9 @@ chat, no 500s/silent failures. The interactive system is proven e2e.
 Expect, and the Lambda log line. That's a real bug found by real e2e — triage
 it before the live runbook.
 
+> To run the chat test yourself in the browser with the exact expected
+> responses at each step, follow [`e2e-walkthrough.md`](./e2e-walkthrough.md).
+
 ## RESULT — first full e2e run (2026-05-18, Claude Sonnet 4.5, stub/fixture)
 
 **ALL 5 PATTERNS PASS**, verified at both the chat layer and DynamoDB:
