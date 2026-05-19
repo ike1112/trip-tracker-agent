@@ -34,8 +34,8 @@ From the CloudFormation template:
 | Service | Resources | Notes |
 |---|---|---|
 | Cognito | 1 UserPool, 1 UserPoolClient (with secret), 1 UserPoolDomain, 2 UserPoolUsers | Lite tier (default), 10K MAU free |
-| API Gateway REST | 2 RestAPIs (`travel-agent-api`, `travel-agent-mcp-api`), 2 stages (`prod`), 2 token authorizers | Regional endpoint type |
-| Lambda | 4 functions: travel-agent (python3.13, arm64, 1024 MB, 30 s), bookings-mcp-server (nodejs22.x, arm64, 1024 MB, 10 s), 2 authorizers (nodejs22.x, arm64, 1024 MB, 10 s), 1 layer | All arm64 |
+| API Gateway REST | 3 RestAPIs (`travel-agent-api`, `flights-mcp-api`, `hotels-mcp-api`), 3 stages (`prod`), 3 token authorizers | Regional endpoint type |
+| Lambda | 8 functions: travel-agent, poller, notifier, flights-mcp-server, hotels-mcp-server, travel-agent-authorizer, flights-mcp-server-authorizer, hotels-mcp-server-authorizer; 1 Python layer | All arm64 |
 | Lambda (CDK-generated) | 2 helper functions: `AwsCustomResource` (Cognito describe) + `AutoDeleteObjects` (S3) | Run only at deploy/destroy |
 | S3 | 1 session-state bucket, 1 BucketPolicy | No encryption, no versioning configured |
 | Bedrock | (no resource — runtime invocation only) | Claude 3.5 Haiku via cross-region inference profile `us.anthropic.claude-3-5-haiku-20241022-v1:0` |
@@ -86,8 +86,8 @@ Source: [aws.amazon.com/lambda/pricing/](https://aws.amazon.com/lambda/pricing/)
 **This project's pattern per chat turn**:
 - 1 invocation of `travel-agent-on-lambda` (~3s @ 1024 MB = 3 GB-s)
 - 1 invocation of `travel-agent-authorizer` (~50 ms cached, ~500 ms cold; effectively free)
-- 1+ invocation of `bookings-mcp-server` (~50 ms @ 1024 MB)
-- 1+ invocation of `bookings-mcp-server-authorizer` (~10 ms — cached for 5 min)
+- 1+ invocation of `flights-mcp-server` and/or `hotels-mcp-server`
+- 1+ invocation of the corresponding MCP authorizer (cache-amortized)
 
 A chat turn ≈ **3.1 GB-seconds + 4 requests**. Cost ≈ `3.1 × $0.0000133334 + 4 × $0.0000002` ≈ **$0.0000420** per turn — under a hundredth of a cent. **Effectively free** at any reasonable demo scale.
 
@@ -101,7 +101,7 @@ Source: [aws.amazon.com/api-gateway/pricing/](https://aws.amazon.com/api-gateway
 - Data transfer out: standard AWS rates
 - No charge for authorizer invocations themselves — those are billed as Lambda invocations.
 
-Per chat turn: 2 REST API calls (1 to agent API, 1 to MCP API). **$0.000007 per turn**, again sub-penny.
+Per chat turn: at least 2 REST API calls (agent API plus one MCP API call; more when both flights+hotels tools are used). Still sub-penny.
 
 > Migration note for cost: HTTP APIs are ~70% cheaper ($1.00/M vs $3.50/M) and would work here. The only blockers are (a) HTTP APIs use JWT authorizers natively, which would let you delete the Lambda authorizers entirely — *that's a feature*, not a regression — and (b) HTTP APIs don't support the API key/usage plan flow used by some clients (irrelevant here). Worth a future swap.
 
@@ -183,7 +183,7 @@ The Bedrock model layer dominates at every scale — the rest is rounding error.
 2. **Set `logRetention` on every Lambda** — currently infinite. Even at low traffic, logs accumulate over years.
 3. **Consider HTTP APIs** instead of REST APIs — 70% cheaper per call, JWT authorizer is built in (could delete the two Lambda authorizers entirely). Latency also lower.
 4. **No NAT, no VPC** — good. NAT Gateways are the #1 silent surprise on AWS bills (~$32/month base + data). This project correctly avoids them.
-5. **arm64 Lambdas** — already done (`lib/strands-agent-on-lambda-stack.js:9`). Costs ~20% less than x86.
+5. **arm64 Lambdas** — already done across stack constructs. Costs ~20% less than x86.
 6. **The S3 bucket has `autoDeleteObjects: true`** — costs come back to zero on `cdk destroy`. No orphaned-data risk.
 7. **No CloudWatch alarms** — at this scale you don't need them, but at production scale, set Bedrock-spend alarms; runaway agent loops can rack up token cost fast.
 

@@ -213,7 +213,7 @@ EventBridge rate(4h) ─▶ trip-tracker-poller λ
   `xray_trace_id`; the poller emits 4 EMF metrics; one CloudWatch dashboard
   covers the 8 Lambdas + 3 APIs; a notifier-error alarm fires on send
   failures; X-Ray gives the cross-service waterfall.
-- **Cost control:** AWS Budgets $10/mo → SNS → email at 80%/100%. Idle
+- **Cost control:** AWS Budgets $10/mo direct email subscriber at 80%/100%. Idle
   fixed cost is the two Secrets Manager secrets (~$0.80/mo); everything
   else is free-tier / on-demand near-zero at rest.
 - **Modes (ADR 0002):** `mcpMode` fixture (default, no provider keys) vs

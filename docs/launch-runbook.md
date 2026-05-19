@@ -62,8 +62,9 @@ you a week you can't buy back.
       `agent-authorizer`, `mcp-authorizer`, `flights-mcp`, `hotels-mcp`.
 - [ ] `cp .env.example .env`, fill keys from Phase 0 (kept handy; CDK reads
       `-c` context, not a runtime `.env`).
-- [ ] Sanity gate before spending: `npm test` + poller/notifier pytest pass
-      locally (fixture/stub — zero cost). If these fail, stop here.
+- [ ] Sanity gate before spending: `npm test` + `npm run test:node` +
+      `python -m pytest evals/tests -q` pass locally (fixture/stub —
+      zero cost). If these fail, stop here.
 
 ## Phase 2 — Deploy live
 
@@ -164,7 +165,7 @@ nothing rots on the first reviewer click. Do these while the clock runs.
 - [ ] **README first-screen layout target** (avoid evidence soup — one tight
       "Proof it works" block, everything else linked not inlined). Order:
       1. one-line pitch
-      2. `(TODO placeholder)` 60-second fixture-mode try — see TODOS
+      2. 60-second fixture-mode try (use the quickstart command block in README)
       3. architecture diagram link
       4. **Proof it works** — ≤4 bullets: eval chat-pattern pass rate;
          decision-quality score; link to `evals/results/2026-05-13-baseline.md`;

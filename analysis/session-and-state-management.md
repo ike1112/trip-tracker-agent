@@ -1,6 +1,10 @@
 # Session and State Management Analysis
 ## `strands-agent-on-lambda`
 
+> Historical note (updated 2026-05-19): sections that mention
+> the legacy MCP scaffold describe the pre-slice-8 design. Current runtime uses
+> `flights-mcp` + `hotels-mcp` direct Lambda handlers.
+
 > Analysis date: 2026-05-08  
 > Codebase snapshot: all files under `lambdas/`, `web/`, and `lib/`
 
@@ -31,7 +35,7 @@ The system is composed of four independently deployed units:
 |---|---|---|
 | **Web app** (`web/`) | FastAPI + Gradio container | Browser UI, OAuth2 login flow |
 | **Agent Lambda** (`lambdas/travel-agent/`) | Python 3.13 / Strands SDK | LLM orchestration, session load/save |
-| **MCP Server Lambda** (`lambdas/bookings-mcp/`) | Node 22 / Express + MCP SDK | Booking tools, travel policy enforcement |
+| **MCP Server Lambdas** (`lambdas/flights-mcp/`, `lambdas/hotels-mcp/`) | Node 22 direct handlers + MCP SDK | Live/fixture pricing tools, user-scoped auth enforcement |
 | **Cognito** | AWS managed | User pool, OIDC IdP |
 
 Infrastructure is provisioned by CDK (`lib/`) with the following state-related resources:
@@ -217,7 +221,7 @@ The web app stores `access_token` and `username` in a Starlette `SessionMiddlewa
 
 ### The MCP server is fully stateless
 
-From `lambdas/bookings-mcp/transport.js`:
+From the MCP direct-handler transport path (current services: `lambdas/flights-mcp/` and `lambdas/hotels-mcp/`):
 
 ```javascript
 // transport.js – lines 16-20
@@ -233,7 +237,7 @@ A **new `McpServer` instance and a new `StreamableHTTPServerTransport` are creat
 
 ### Tool implementations
 
-All four tools are pure functions with no side effects on shared state:
+The MCP tools are pure functions with no side effects on shared state:
 
 | Tool | File | State accessed |
 |---|---|---|
@@ -253,7 +257,7 @@ const CARS = ["Toyota Corolla", "Honda CRV", "Mercedes C300"]
 
 ### User identity in tools
 
-Every tool reads user identity from `ctx.authInfo`, which is populated from the JWT injected by `bookings-mcp/index.js`:
+Every tool reads user identity from `ctx.authInfo`, populated after in-handler JWT verification in the MCP Lambdas:
 
 ```javascript
 // index.js – lines 21-26
@@ -269,7 +273,7 @@ Cognito JWT (RS256)
   ↓ re-parsed in travel-agent/app.py → User object
   ↓ encoded into new HS256 JWT in mcp_client_manager.py
   ↓ verified in mcp-authorizer/index.js
-  ↓ stored on req.auth in bookings-mcp/index.js
+    ↓ stored on request auth context in MCP handler
   ↓ available as ctx.authInfo in every tool handler
 ```
 
@@ -511,7 +515,7 @@ Alice's Cognito `sub` = `"aabbcc-1234-..."`, username = `"Alice"`.
     
     **At API Gateway (MCP):**
     - `mcp-authorizer/index.js` verifies HS256 token, checks `sub === "travel-agent"` → `Effect=Allow`.
-    - `bookings-mcp/index.js` re-verifies JWT, stores claims on `req.auth`.
+    - MCP handler re-verifies JWT, stores claims on auth context.
     - `transport.js` creates a new `McpServer` + `StreamableHTTPServerTransport`.
     - Returns tool list: `[book-hotel, book-car, get-available-cars, get-travel-policies]`.
     
@@ -746,7 +750,7 @@ Session objects in S3 accumulate indefinitely. Long-running deployments will acc
 
 ### 5. Hardcoded JWT_SIGNATURE_SECRET → security risk
 
-The HS256 shared secret defaults to `"jwt-signature-secret"` hardcoded in `lib/strands-agent-on-lambda-stack.js`. This is the same for every deployment unless overridden. In production this must be stored in AWS Secrets Manager and loaded at Lambda startup.
+JWT signing secrets are sourced from AWS Secrets Manager (per-component), and verifier/minter paths read them lazily at runtime.
 
 ### 6. Web session `secret_key="secret"` → security risk
 
@@ -758,7 +762,7 @@ If the Agent Lambda scales to N concurrent execution environments, each has its 
 
 ### 8. Double JWT verification on the MCP path → redundant but harmless
 
-Both API Gateway (via `mcp-authorizer`) and the Express middleware (`bookings-mcp/index.js`) verify the HS256 JWT. This is documented as intentional defense-in-depth but means a JWT decoding error at the application layer would return a different status code format than the API Gateway layer would.
+Both API Gateway (via `mcp-authorizer`) and the MCP Lambda handlers verify the HS256 JWT. This is intentional defense in depth and may produce different error shapes across layers.
 
 ### 9. User context injected via prompt, not tool call → potential for prompt injection
 

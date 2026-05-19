@@ -69,19 +69,19 @@ Two design points worth understanding:
 1. **`sub` is the agent itself**, not the user. The MCP authorizer enforces `claims.sub === 'travel-agent'` (`lambdas/mcp-authorizer/index.js:16-19`); any other principal is denied. So the MCP server only accepts calls from the travel-agent service.
 2. The user is propagated as **side claims** (`user_id`, `user_name`). This is the "**at no point in time user identity is inferred from LLM's response**" guarantee the README brags about — the user identity rides on a token the LLM cannot see or fabricate.
 
-Why HS256 instead of RS256 like the Cognito hop? Because both ends are owned by *us* — there's no third-party IdP. A shared symmetric secret is fine and cheaper. The secret value is `'jwt-signature-secret'`, hardcoded at `lib/strands-agent-on-lambda-stack.js:10` and passed via Lambda env var on both sides. **In production this should be in Secrets Manager** — the file even leaves a comment to that effect on the Cognito client secret output.
+Why HS256 instead of RS256 like the Cognito hop? Because both ends are owned by *us* — there's no third-party IdP. A shared symmetric secret is fine and cheaper. In current code this is implemented with per-component Secrets Manager secrets passed by ARN to the Lambdas.
 
 ## 5. MCP API Gateway → MCP Authorizer → MCP Server
 
-The MCP API Gateway also uses a TokenAuthorizer (`lib/mcp-server.js:50-53`), running `lambdas/mcp-authorizer/index.js`. It verifies the agent's JWT against the same shared secret and `Allow`s if `sub === 'travel-agent'`.
+Each MCP API Gateway uses a TokenAuthorizer (`lib/flights-mcp-server.js` and `lib/hotels-mcp-server.js`), running `lambdas/mcp-authorizer/index.js`. It verifies the JWT against the per-component signing secret set and enforces allowed `sub` values.
 
-Then `lambdas/bookings-mcp/index.js:24-39` runs as a *second* validation layer at the application level — it re-verifies the JWT and stores the claims on `req.auth`. Two layers of validation is overkill but harmless; it does mean the MCP server can run standalone (outside API Gateway) without changes.
+Then `lambdas/flights-mcp/index.js` and `lambdas/hotels-mcp/index.js` run a *second* validation layer at the application boundary — they re-verify the JWT in-handler before dispatching to MCP tools. Two layers of validation is overkill but harmless; it means either MCP server can run behind a different upstream boundary without changing auth semantics.
 
-The Lambda Web Adapter (LWA) bridges API Gateway events to a normal Express server listening on port 3001 (`run.sh` → `node index.js` → `app.listen(PORT)` at `index.js:43-45`).
+Both MCP Lambdas use direct handlers (no Express/LWA): API Gateway events are parsed and dispatched through in-memory MCP transport.
 
 ## 6. User context flows into each tool
 
-The MCP SDK exposes `req.auth` as `ctx.authInfo` inside each tool handler. Look at `lambdas/bookings-mcp/tool-book-hotel.js:11-22`:
+The MCP handlers pass verified claims through tool context (`ctx.authInfo`) so tools can enforce user-scoped behavior without trusting LLM text.
 
 ```javascript
 async ({ city, date, nights }, ctx) => {
@@ -121,11 +121,11 @@ Beyond the identity tokens above, the AWS-side IAM is small:
 
 ## Quirks worth flagging
 
-- Shared secret is **hardcoded** in CDK (`lib/strands-agent-on-lambda-stack.js:10`) → should be Secrets Manager + Lambda extension cache.
+- Secret material is in Secrets Manager and loaded lazily in verifier/minter paths; no hard-coded signing literal remains in stack code.
 - Cognito client secret is exported as a CFN output in plaintext (`lib/cognito.js:88-93`) — file even self-comments this is for brevity.
 - Web session middleware uses `secret_key="secret"` — fine for a demo, would be a vuln in real life.
 - Both Lambda authorizers are created without an explicit cache TTL override, so API Gateway default authorizer caching behavior applies (commonly 5 minutes). Practical effect: a logged-out token may continue to pass for a short window after revocation.
-- Two layers of JWT validation on the MCP side (authorizer + Express middleware) — defensive but redundant.
+- Two layers of JWT validation on the MCP side (API authorizer + in-handler verifier) — defensive but redundant.
 
 ---
 

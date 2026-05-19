@@ -270,8 +270,8 @@ These are real risks the codebase does not address, by design for v1:
   internal JWT minter and second crosser of boundary [2]. ADR 0003
   documents the sequential-loop isolation guarantee called out in this
   section. The shared-secret risk is now triple-tracked: original
-  Secrets row (line 64), this section's first row, and a `TODO(slice-9)`
-  comment in `lib/strands-agent-on-lambda-stack.js` — ADR 0006 will
+  Secrets row (line 64), this section's first row, and a former
+  stack-level TODO comment in the CDK code — ADR 0006 will
   resolve it.
 - **2026-05-13** — slice 6: appended [6] for the poller's Bedrock
   InvokeModel boundary (prompt injection via provider strings, cost
@@ -288,8 +288,8 @@ These are real risks the codebase does not address, by design for v1:
   0005 documents the at-least-once trade-off. [4]'s IAM row updated
   to reference the new SES + Lambda invoke grants.
 - **2026-05-15** — ADR 0006: the shared-secret risk is **closed**. The
-  hard-coded literal and its `TODO` comment are removed from
-  `lib/strands-agent-on-lambda-stack.js`; the agent and poller now sign
+  hard-coded literal and its stack-level TODO are removed from the CDK
+  stack wiring; the agent and poller now sign
   with separate Secrets Manager secrets and distinct `sub` claims, and
   every verifier (MCP authorizer + both MCP server handlers) couples
   each secret to its allowed `sub`. Supersedes the 2026-05-10

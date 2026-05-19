@@ -194,6 +194,9 @@ Loom outline for slice 9:
 
 Extends design-spec §9. Completion targets each item to the slice that closes it.
 
+Note: this checklist is a dated planning artifact. Several originally
+slice-9-scoped items below are already complete on `main`.
+
 - [x] (slice 1) DDB tables provisioned with on-demand billing, TTL on FareHistory
 - [x] (slice 2) Closure-factory pattern + ADR 0001 + unit tests for `watches.py`
 - [x] (slice 3) `flights-mcp` Lambda + fixture mode + ADR 0002 + threat-model Duffel section
@@ -202,7 +205,7 @@ Extends design-spec §9. Completion targets each item to the slice that closes i
 - [x] (slice 6) Bedrock decision + eval baseline report committed (`evals/results/`) + ADR 0004
 - [x] (slice 7) Notifier + SES + ADR 0005 + markdown-safe email template
 - [x] (slice 8) legacy stub MCP scaffold removed + CloudWatch dashboard committed
-- [ ] (slice 9) CI green + README rewritten + ADR 0006/0007 written + threat model committed + LICENSE + `.env.example` + Loom recorded + AWS Budget alarm deployed
+- [ ] (slice 9, remaining) CI green + Loom recorded
 - [ ] (post-launch, design-spec §9) One real watch active for 7 days before declaring done
 
 ---

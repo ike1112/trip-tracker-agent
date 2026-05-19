@@ -28,10 +28,10 @@ This file maps each architectural choice in the project to the official AWS patt
                                                     │  mints HS256 JWT
                                                     ▼
                           ┌──────────────────┐  Bearer agent JWT  ┌──────────────────┐
-                          │   mcp-authorizer │ ─────────────────▶ │  bookings-mcp    │
-                          │      Lambda      │                    │  (LWA + Express) │
+                          │   mcp-authorizer │ ─────────────────▶ │ flights/hotels   │
+                          │      Lambda      │                    │ MCP Lambdas       │
                           └──────────────────┘                    └──────────────────┘
-                                                                       (4 tools)
+                                                                       (direct handlers)
 ```
 
 This is a textbook **serverless multi-tier AI agent**: identity at the edge, stateless app layer, externalized session state, model layer via managed inference, and tool-call boundary via MCP. Every block is pay-per-use.
@@ -55,7 +55,8 @@ This is a textbook **serverless multi-tier AI agent**: identity at the edge, sta
 ## 3. Pattern: API Gateway Lambda Token Authorizer with JWKS
 
 **What this project does:**
-- `lib/agent.js:78-86` and `lib/mcp-server.js:50-58` create `apigw.TokenAuthorizer` constructs.
+- `lib/agent.js` creates the agent API authorizer (Cognito RS256/JWKS).
+- `lib/flights-mcp-server.js` and `lib/hotels-mcp-server.js` create the MCP API token authorizers.
 - `lambdas/agent-authorizer/index.js` verifies a Cognito-issued RS256 JWT against the JWKS endpoint (`COGNITO_JWKS_URL`).
 - `lambdas/mcp-authorizer/index.js` verifies an HS256 JWT signed with a shared secret.
 
@@ -72,25 +73,24 @@ See `analysis/identity-flow.md` for the full sequence.
 
 ---
 
-## 4. Pattern: MCP Server on AWS Lambda via Lambda Web Adapter
+## 4. Pattern: MCP Servers on AWS Lambda (direct handler)
 
 **What this project does:**
-- `lambdas/bookings-mcp/index.js` runs an Express HTTP server listening on port 3001.
-- The Lambda function uses `Handler: 'run.sh'` and a layer reference to the **Lambda Web Adapter** (LWA) — `arn:aws:lambda:<region>:753240598075:layer:LambdaAdapterLayerArm64:25` (`lib/mcp-server.js:10`).
-- LWA forks the process, runs `run.sh`, then bridges the API Gateway → Lambda event format to localhost HTTP requests.
-- `lambdas/bookings-mcp/transport.js` uses `@modelcontextprotocol/sdk/server/streamableHttp.js` to handle MCP `tools/list`, `initialize`, etc. as JSON-RPC over HTTP.
-- `sessionIdGenerator: undefined` and `enableJsonResponse: true` make this a **stateless** MCP server — required for Lambda since each invocation may land on a fresh container.
+- `lambdas/flights-mcp/index.js` and `lambdas/hotels-mcp/index.js` are direct Lambda handlers (no Express, no Lambda Web Adapter).
+- Each handler parses JSON-RPC requests and dispatches via an in-memory transport (`lambda-transport.js`) to the MCP server implementation.
+- API Gateway fronts each service separately (`flights-mcp-api`, `hotels-mcp-api`) with token authorizers.
+- The servers are stateless by design; each invocation can land on a fresh container.
 
 **AWS guidance:**
 - [AWS MCP Server marketplace integration](https://docs.aws.amazon.com/marketplace/latest/userguide/integrating-mcp.html) — *"providers implement an MCP server exposing capabilities (tools, resources, and prompts) via JSON-RPC 2.0"*
 - Lambda Web Adapter project: [github.com/awslabs/aws-lambda-web-adapter](https://github.com/awslabs/aws-lambda-web-adapter) — official AWS Labs project for running web frameworks (Express, Flask, FastAPI) on Lambda without rewriting them as native handlers.
 
-**Verdict:** sound pattern for prototyping an MCP server on serverless infra. **Trade-offs to know:**
-1. **Cold starts** — first request to a cold Lambda has a ~700 ms LWA bootstrap + Express startup. Mitigation: Provisioned Concurrency (paid).
-2. **Stateless MCP** — you cannot use MCP server-side resources that maintain session state (e.g., subscriptions, server-initiated notifications). Tools-only is fine.
-3. **No streaming responses** — `enableJsonResponse: true` means you get JSON, not SSE. API Gateway REST doesn't support streaming, so this matches the deployment topology.
+**Verdict:** sound pattern for low-latency, low-complexity MCP tool calls on Lambda. **Trade-offs to know:**
+1. **Stateless MCP** — no long-lived server-side sessions/subscriptions; tools-only flows are the intended shape.
+2. **No streaming responses** — API Gateway REST + direct handler returns JSON responses, not SSE.
+3. **Scale-out duplicates warm caches** — each warm container keeps its own in-memory objects; correctness is fine but cache locality is best-effort.
 
-For long-running agentic flows or high QPS, ECS Fargate or App Runner would be a better fit. For this prototype, LWA on Lambda is the cheapest workable choice.
+For long-running agentic flows or very high sustained QPS, ECS/Fargate or App Runner is still the better fit.
 
 ---
 
@@ -148,7 +148,7 @@ In production this would matter for resource leaks if you have thousands of dist
 
 **What this project does:**
 - One REST API for the agent (`travel-agent-api`)
-- One REST API for the MCP server (`travel-agent-mcp-api`)
+- Two REST APIs for MCP (`flights-mcp-api`, `hotels-mcp-api`)
 
 **Why split?** Three reasons that make this *not* over-engineering:
 1. **Different authorizers** — agent API verifies Cognito tokens (RS256/JWKS); MCP API verifies the agent's HS256 token. Same API would need two authorizers and per-route routing logic.
@@ -180,8 +180,8 @@ In production this would matter for resource leaks if you have thousands of dist
 **What this project does:**
 - Agent mints a JWT containing `user_id`, `user_name`.
 - MCP authorizer puts the validated claims on `req.auth`.
-- `lambdas/bookings-mcp/transport.js` wraps Express such that MCP tool handlers receive `ctx.authInfo` with the claims.
-- `lambdas/bookings-mcp/tool-book-hotel.js:11-22` uses `ctx.authInfo.user_name`.
+- `lambdas/flights-mcp/index.js` and `lambdas/hotels-mcp/index.js` re-verify the JWT in-handler and pass claims into tool context.
+- Both MCP services use the same per-component JWT contract (`sub` coupling) and read user claims from verified token fields.
 
 **Why this pattern matters for AI agents:** the LLM only sees what's in the prompt and the tool args. It does NOT see the auth context. So even if the LLM is jailbroken into "ignore previous instructions" or "pretend you're talking to Alice when you're actually Bob", the tool call's auth context is whatever the JWT says — which is set by the agent code, not the LLM.
 
