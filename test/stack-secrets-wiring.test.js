@@ -13,7 +13,7 @@ beforeAll(() => {
     process.env.DUFFEL_API_KEY = 'stub';
     process.env.LITEAPI_API_KEY = 'stub';
     jest.resetModules();
-    const { StrandsAgentOnLambdaStack } = require('../lib/strands-agent-on-lambda-stack');
+    const { TripTrackerStack } = require('../lib/trip-tracker-stack');
     const app = new App({ context: {
         'aws:cdk:bundling-stacks': [],
         mcpMode: 'fixture',
@@ -23,7 +23,7 @@ beforeAll(() => {
         notifierRecipientEmail: 'me@example.com',
         sesMode: 'stub',
     } });
-    const stack = new StrandsAgentOnLambdaStack(app, 'WiringTestStack', {});
+    const stack = new TripTrackerStack(app, 'WiringTestStack', {});
     tmpl = app.synth().getStackByName('WiringTestStack').template;
 });
 

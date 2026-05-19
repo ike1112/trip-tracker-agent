@@ -11,7 +11,7 @@
  *      byte-identical dashboard bodies. Protects the cdk-diff-clean
  *      invariant.
  *   F. Full-stack synth assertions — instantiate
- *      StrandsAgentOnLambdaStack itself, parse the synthesised
+ *      TripTrackerStack itself, parse the synthesised
  *      DashboardBody Fn::Join, and assert metric-dimension shape for
  *      every expected Lambda + API.
  *
@@ -272,7 +272,7 @@ describe('ObservabilityDashboardConstruct', () => {
             // wheel layer.
             process.env.DUFFEL_API_KEY = 'stub';
             process.env.LITEAPI_API_KEY = 'stub';
-            const { StrandsAgentOnLambdaStack } = require('../lib/strands-agent-on-lambda-stack');
+            const { TripTrackerStack } = require('../lib/trip-tracker-stack');
             const app = new App({ context: {
                 'aws:cdk:bundling-stacks': [],
                 mcpMode: 'fixture',
@@ -282,7 +282,7 @@ describe('ObservabilityDashboardConstruct', () => {
                 notifierRecipientEmail: 'me@example.com',
                 sesMode: 'stub',
             }});
-            const stack = new StrandsAgentOnLambdaStack(app, 'FullStackTest', {});
+            const stack = new TripTrackerStack(app, 'FullStackTest', {});
             const tmpl = app.synth().getStackByName('FullStackTest').template;
             const parsed = parseDashboardBody(tmpl);
             joined = parsed.rawJoined;

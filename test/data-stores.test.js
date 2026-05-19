@@ -83,7 +83,7 @@ describe('DataStoresConstruct — Group J-B: poller can Query the GSI', () => {
         // cross-instance matcher hazard documented in budget-alarm.test.js).
         const { App } = require('aws-cdk-lib');
         const { Template } = require('aws-cdk-lib/assertions');
-        const { StrandsAgentOnLambdaStack } = require('../lib/strands-agent-on-lambda-stack');
+        const { TripTrackerStack } = require('../lib/trip-tracker-stack');
         const app = new App({ context: {
             'aws:cdk:bundling-stacks': [],
             mcpMode: 'fixture',
@@ -93,7 +93,7 @@ describe('DataStoresConstruct — Group J-B: poller can Query the GSI', () => {
             notifierRecipientEmail: 'me@example.com',
             sesMode: 'stub',
         } });
-        const stack = new StrandsAgentOnLambdaStack(app, 'GsiWiringStack', {});
+        const stack = new TripTrackerStack(app, 'GsiWiringStack', {});
         const template = Template.fromStack(stack);
 
         // Identify the poller Lambda by its poller-only env vars, then

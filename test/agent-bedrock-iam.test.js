@@ -16,7 +16,7 @@ function synth(extraContext = {}) {
     process.env.DUFFEL_API_KEY = 'stub';
     process.env.LITEAPI_API_KEY = 'stub';
     jest.resetModules();
-    const { StrandsAgentOnLambdaStack } = require('../lib/strands-agent-on-lambda-stack');
+    const { TripTrackerStack } = require('../lib/trip-tracker-stack');
     const app = new App({ context: {
         'aws:cdk:bundling-stacks': [],
         mcpMode: 'fixture',
@@ -27,7 +27,7 @@ function synth(extraContext = {}) {
         sesMode: 'stub',
         ...extraContext,
     } });
-    const stack = new StrandsAgentOnLambdaStack(app, 'IamTestStack', {});
+    const stack = new TripTrackerStack(app, 'IamTestStack', {});
     return app.synth().getStackByName('IamTestStack').template;
 }
 

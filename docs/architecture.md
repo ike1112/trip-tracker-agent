@@ -37,7 +37,7 @@ decisions in [`adr/`](./adr/README.md); trust analysis in
 | **Amazon SES** | Sends the trip-alert email (sandbox: verified sender + recipient). Stubbable. |
 | **AWS Budgets** | Account-level $10/month COST budget; 80% actual + 100% forecast notifications. |
 | **Amazon SNS** | Delivery channel for the Budgets notification (email subscription). |
-| **Amazon CloudWatch** | Structured JSON logs (Lambda Powertools / pino), poller EMF metrics, 1 dashboard (`trip-tracker-StrandsAgentOnLambdaStack`), notifier-error alarm. |
+| **Amazon CloudWatch** | Structured JSON logs (Lambda Powertools / pino), poller EMF metrics, 1 dashboard (`trip-tracker-TripTrackerStack`), notifier-error alarm. |
 | **AWS X-Ray** | `tracing: ACTIVE` on every Lambda — cross-service trace `web → API GW → agent → MCP`. |
 | **AWS IAM** | Per-component roles, least privilege. Agent Bedrock grant scoped to the 3 US-region foundation-model ARNs + the inference-profile ARN (ADR 0006). |
 | **AWS CloudFormation / CDK** | Infrastructure as code. One stack, file separation by construct. |

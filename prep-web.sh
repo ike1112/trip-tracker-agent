@@ -8,7 +8,7 @@
 # hit, which is unique for each value below.
 set -e
 DST_FILE_NAME="./web/.env"
-STACK_NAME="StrandsAgentOnLambdaStack"
+STACK_NAME="TripTrackerStack"
 
 # get_output <OutputKey substring> — prints the matching output value.
 get_output() {

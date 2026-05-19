@@ -1,5 +1,5 @@
 {
-  "app": "node bin/strands-agent-on-lambda.js",
+  "app": "node bin/trip-tracker.js",
   "watch": {
     "include": [
       "**"

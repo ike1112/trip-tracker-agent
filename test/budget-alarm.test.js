@@ -222,7 +222,7 @@ describe('BudgetAlarmConstruct — Group C: full-stack wiring', () => {
         // matchers by the post-reset Template (cross-instance mismatch).
         const { App } = require('aws-cdk-lib');
         const { Template, Match } = require('aws-cdk-lib/assertions');
-        const { StrandsAgentOnLambdaStack } = require('../lib/strands-agent-on-lambda-stack');
+        const { TripTrackerStack } = require('../lib/trip-tracker-stack');
         const app = new App({ context: {
             'aws:cdk:bundling-stacks': [],
             mcpMode: 'fixture',
@@ -232,7 +232,7 @@ describe('BudgetAlarmConstruct — Group C: full-stack wiring', () => {
             notifierRecipientEmail: 'me@example.com',
             sesMode: 'stub',
         } });
-        const stack = new StrandsAgentOnLambdaStack(app, 'BudgetWiringStack', {});
+        const stack = new TripTrackerStack(app, 'BudgetWiringStack', {});
         const t = Template.fromStack(stack);
         t.resourceCountIs('AWS::Budgets::Budget', 1);
         t.hasResourceProperties('AWS::Budgets::Budget', {

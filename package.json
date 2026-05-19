@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "license": "MIT",
   "bin": {
+    "trip-tracker": "bin/trip-tracker.js",
     "strands-agent-on-lambda": "bin/strands-agent-on-lambda.js"
   },
   "scripts": {
