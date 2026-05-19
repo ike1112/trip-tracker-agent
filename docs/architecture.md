@@ -1,24 +1,11 @@
 # Trip Tracker — Complete Architecture
 
 Authoritative architecture of the **deployed** system, verified against a
-live deploy (account resources, request traces, source). Supersedes the
-scaffold sketch in [`../img/arch.png`](../img/arch.png), which describes the
-upstream AcmeCorp bookings sample, not this product.
+live deploy (account resources, request traces, source).
 
 Companion docs: user flows + sequence diagrams in [`SYSTEM.md`](./SYSTEM.md);
 decisions in [`adr/`](./adr/README.md); trust analysis in
 [`threat-model.md`](./threat-model.md).
-
-> **What changed vs `img/arch.png` (the initial scaffold sketch):**
-> | Scaffold sketch | This system |
-> |---|---|
-> | HCP Vault issues JWKS | **Amazon Cognito** (user pool, hosted UI, JWKS) |
-> | Deployed with Terraform | **AWS CDK** (CloudFormation) |
-> | One "Bookings MCP" | **Two domain MCP servers**: flights (Duffel), hotels (LiteAPI) |
-> | One shared secret | **Two per-component Secrets Manager secrets** (agent / poller), ADR 0006 |
-> | Booking tools (book-car/hotel) | **Watch-CRUD + price-search tools** (search + alert only, no booking) |
-> | Chat path only | **+ scheduled poll → gate → Bedrock decision → SES alert** path |
-> | No data/observability/cost layer | **DynamoDB, S3, CloudWatch, X-Ray, EventBridge, SES, Budgets, SNS** |
 
 ---
 

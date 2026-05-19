@@ -3,7 +3,7 @@
 How the system works, who it is for, the user flows, and end-to-end
 sequence diagrams. Pairs with:
 
-- Architecture diagram (AWS icons, numbered): [`architecture.drawio`](./architecture.drawio)
+- Architecture diagram (AWS icons, numbered): [`architecture-v2.drawio`](./architecture-v2.drawio)
 - Canonical design: [`superpowers/specs/2026-05-08-trip-tracker-agent-design.md`](./superpowers/specs/2026-05-08-trip-tracker-agent-design.md)
 - Decisions: [`adr/README.md`](./adr/README.md) · Threat model: [`threat-model.md`](./threat-model.md)
 - Quickstart / deploy: [`../README.md`](../README.md)
