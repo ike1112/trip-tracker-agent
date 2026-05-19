@@ -9,4 +9,9 @@ cdk.out
 __pycache__
 .pytest_cache
 .claude/prp-ralph.state.md
+# Local Claude Code permission caches — per-developer, workstation-specific
+# (absolute paths, blanket git grants). Never commit; not project config.
+.claude/settings.local.json
+.claude/settings.json
 .cache
+.gstack/
