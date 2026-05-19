@@ -313,11 +313,16 @@ def test_D2_main_inserts_lambdas_poller_path_into_sys_path(
 def test_D4_bedrock_decide_called_in_alphabetical_fixture_order(
     fixtures_dir_with, tmp_path
 ):
+    def _fixture(case_id: str) -> dict:
+        d = make_fixture_dict(case_id)
+        d["snapshot"] = {**d["snapshot"], "watchId": case_id}
+        return d
+
     main = _import_main()
     path = fixtures_dir_with([
-        make_fixture_dict("z-last"),
-        make_fixture_dict("a-first"),
-        make_fixture_dict("m-mid"),
+        _fixture("z-last"),
+        _fixture("a-first"),
+        _fixture("m-mid"),
     ])
     out = tmp_path / "r.md"
     call_order = []
@@ -336,17 +341,10 @@ def test_D4_bedrock_decide_called_in_alphabetical_fixture_order(
     with patch.object(bd, "decide", side_effect=_spy):
         main(["--fixtures-dir", str(path), "--out", str(out), "--stub"])
 
-    # Snapshots default to watchId="w-default" — so call_order length is
-    # what we actually assert plus alphabetic processing through fixtures.
-    # We assert main called decide() once per fixture, in fixture-sort order.
-    assert len(call_order) == 3
-    # Fixture order is alphabetical filename: a-first → m-mid → z-last.
-    # We verify by reading the report and observing case_id section order.
-    rep = out.read_text(encoding="utf-8")
-    pos_a = rep.find("### a-first")
-    pos_m = rep.find("### m-mid")
-    pos_z = rep.find("### z-last")
-    assert 0 < pos_a < pos_m < pos_z
+    # Fixture order is alphabetical filename: a-first -> m-mid -> z-last.
+    # Snapshot watchId was set to case_id above so call order is directly
+    # observable here.
+    assert call_order == ["a-first", "m-mid", "z-last"]
 
 
 # ===========================================================================
