@@ -48,10 +48,18 @@ def prompt(user: User, composite_prompt: str):
     # Use a stable per-user session ID so the Strands session manager can load
     # and append prior conversation state from S3. This is what makes the agent
     # feel conversational across multiple requests instead of stateless.
+    session_id = f"session_for_user_{user.id}"
+    session_prefix = "agent_sessions"
     session_manager = S3SessionManager(
-        session_id=f"session_for_user_{user.id}",
+        session_id=session_id,
         bucket=SESSION_STORE_BUCKET_NAME,
-        prefix="agent_sessions"
+        prefix=session_prefix
+    )
+    l.info(
+        "s3_session_configured "
+        f"bucket={SESSION_STORE_BUCKET_NAME} "
+        f"prefix={session_prefix} "
+        f"session_id={session_id}"
     )
 
     try:
@@ -79,8 +87,11 @@ def prompt(user: User, composite_prompt: str):
         )
 
         # Invoke the agent with the fully prepared prompt. Strands handles the
-        # underlying model call, session state updates, and tool-use loop.
+        # underlying model call, tool-use loop, and S3 session persistence
+        # lifecycle (load prior turns, append this turn, persist updated state).
+        l.info(f"agent_turn_start session_id={session_id}")
         agent_response = agent(composite_prompt)
+        l.info(f"agent_turn_complete session_id={session_id}")
 
         # The SDK returns a richer structured message object; the web UI only
         # needs the final text content for this demo application.
