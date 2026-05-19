@@ -33,6 +33,7 @@ function synth(extraContext = {}) {
 
 // Pull every Bedrock InvokeModel* policy statement out of the template.
 function bedrockStatements(tmpl) {
+    
     const out = [];
     for (const r of Object.values(tmpl.Resources || {})) {
         if (r.Type !== 'AWS::IAM::Policy') continue;
