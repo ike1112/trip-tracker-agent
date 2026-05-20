@@ -116,7 +116,7 @@ def test_B8_hs256_token_returns_401(app_module, rsa_keypair):
 
 
 # ---------------------------------------------------------------------------
-# Handler robustness — these RED tests drive the bug fix in Task 2.5
+# Handler robustness — drive the 400-on-bad-input fix
 # ---------------------------------------------------------------------------
 
 def test_B9_malformed_json_body_returns_400(app_module, rsa_keypair):
