@@ -100,11 +100,26 @@ test('A7 token kid not in JWKS => Deny', async () => {
     assert.equal(res.policyDocument.Statement[0].Effect, 'Deny');
 });
 
-test('A8 JWKS fetch throws => Deny (fail-closed)', async () => {
+test('A8 JWKS fetch throws => Deny (fail-closed) with a distinct ECONNREFUSED reason', async () => {
+    // A7 covers "kid not found"; A8 covers "JWKS unreachable". The production
+    // code denies for both, but the two failure modes must surface distinct
+    // console.error reasons so an operator (or alarm) can tell them apart.
     __setSigningKeyErrorForTests(new Error('ECONNREFUSED'));
     const tok = sign({ sub: 'user-1', username: 'alice' });
-    const res = await handler(event(`Bearer ${tok}`));
-    assert.equal(res.policyDocument.Statement[0].Effect, 'Deny');
+
+    const errs = [];
+    const origErr = console.error;
+    console.error = (m) => errs.push(String(m));
+    try {
+        const res = await handler(event(`Bearer ${tok}`));
+        assert.equal(res.policyDocument.Statement[0].Effect, 'Deny');
+        assert.ok(
+            errs.some((e) => e.includes('ECONNREFUSED')),
+            `expected ECONNREFUSED reason distinct from A7's "kid" reason; got: ${errs.join(' | ')}`,
+        );
+    } finally {
+        console.error = origErr;
+    }
 });
 
 test('A9 token signed by a different RSA keypair => Deny', async () => {
