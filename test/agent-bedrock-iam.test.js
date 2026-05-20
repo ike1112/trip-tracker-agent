@@ -10,7 +10,7 @@
  */
 const { App } = require('aws-cdk-lib');
 
-const DEFAULT_MODEL = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
+const DEFAULT_MODEL = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 
 function synth(extraContext = {}) {
     process.env.DUFFEL_API_KEY = 'stub';
@@ -81,7 +81,7 @@ describe('Agent Bedrock IAM grant', () => {
     test('C2 grants InvokeModel on the foundation-model ARN in all 3 US regions', () => {
         const frags = bedrockStatements(synth()).flatMap(resourceFragments).join('\n');
         for (const region of ['us-east-1', 'us-east-2', 'us-west-2']) {
-            expect(frags).toContain(`arn:aws:bedrock:${region}::foundation-model/anthropic.claude-3-5-haiku-20241022-v1:0`);
+            expect(frags).toContain(`arn:aws:bedrock:${region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0`);
         }
     });
 
@@ -112,7 +112,7 @@ describe('Agent Bedrock IAM grant', () => {
         // model id so this asserts the agent grant specifically.
         const all = bedrockStatements(synth())
             .flatMap(resourceFragments)
-            .filter((f) => f.includes('claude-3-5-haiku-20241022-v1:0'));
+            .filter((f) => f.includes('claude-haiku-4-5-20251001-v1:0'));
         expect(all).toHaveLength(4);
     });
 
