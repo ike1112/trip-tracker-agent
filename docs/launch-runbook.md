@@ -25,17 +25,26 @@ you a week you can't buy back.
       in the deploy region. Do not trust prose; read the IDs from source so
       this can't rot:
       - Chat agent: `lib/agent.js` `DEFAULT_AGENT_BEDROCK_MODEL_ID`
-        (currently `us.anthropic.claude-3-5-haiku-20241022-v1:0` — a `us.`
-        inference profile over Claude 3.5 Haiku). Enable model access for the
-        **underlying foundation model** (`anthropic.claude-3-5-haiku-20241022-v1:0`)
+        (currently `us.anthropic.claude-haiku-4-5-20251001-v1:0` — a `us.`
+        inference profile over Claude Haiku 4.5). Enable model access for the
+        **underlying foundation model** (`anthropic.claude-haiku-4-5-20251001-v1:0`)
         in every US region the profile routes to (the IAM grant in `agent.js`
         enumerates them).
       - Poller decision: `lambdas/poller/bedrock_decide.py` `DEFAULT_MODEL_ID`
         (currently `claude-haiku-4-5-20251001`).
-      Note: design-spec §4 says "Sonnet 4.6 chat agent" — that is **stale**
-      vs the deployed default. Enable what the two files above actually name,
-      or override `-c agentBedrockModelId=us.<profile-id>` (must match the
-      `^us\.` format `agent.js` validates at synth).
+- [ ] **AWS Marketplace gate (the non-obvious one).** Anthropic models on
+      Bedrock now require an account-level AWS Marketplace subscription. A
+      brand-new IAM principal in this account that has never invoked the
+      model will hit:
+      `AccessDeniedException ... aws-marketplace:ViewSubscriptions, aws-marketplace:Subscribe`
+      even though Bedrock model access shows ACTIVE. Symptom is identical
+      to a missing IAM grant. Fix: do the model-access request through the
+      **Bedrock console** ("Manage model access"), not by editing IAM —
+      the console flow handles the marketplace subscription as part of the
+      request, clearing the gate stack-wide. A subscription created this
+      way persists across stack destroy/recreate at the account level,
+      but a fresh IAM principal in a different account starts the gate
+      over.
 - [ ] **Duffel** → **live access token** (not test). Search is free; Duffel
       charges on booking only and this system never books. Confirm the account
       is **activated for live search** (some Duffel accounts gate live access);
