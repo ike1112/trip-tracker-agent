@@ -30,10 +30,30 @@ const client = jwksClient({
 // jwt.verify is callback-based; promisify lets us use async/await for clearer control flow.
 const verifyJwt = promisify(jwt.verify);
 
+// Test seams. Production code paths never touch these (both null in real runs).
+// __setSigningKeyForTests injects a fixed public key so tests can verify any
+// token without a real JWKS round-trip; __setSigningKeyErrorForTests simulates
+// a JWKS lookup failure so the fail-closed branch is testable.
+let _testKey = null;
+let _testKeyError = null;
+export function __setSigningKeyForTests(publicKey) {
+    _testKey = publicKey;
+    _testKeyError = null;
+}
+export function __setSigningKeyErrorForTests(err) {
+    _testKey = null;
+    _testKeyError = err;
+}
+export function __resetSigningKeyTestSeams() {
+    _testKey = null;
+    _testKeyError = null;
+}
+
 // jsonwebtoken calls this function with the token header.
 // We use the header's `kid` to fetch the matching Cognito public key that signed the token.
 function getKey(header, callback) {
-    // console.log(`>getKey`);
+    if (_testKeyError !== null) return callback(_testKeyError);
+    if (_testKey !== null) return callback(null, _testKey);
     client.getSigningKey(header.kid, (err, key) => {
         if (err) return callback(err);
         const signingKey = key.getPublicKey();
