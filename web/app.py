@@ -114,7 +114,7 @@ with gr.Blocks() as gradio_app:
         gr.Image(value='arch.png', show_label=False)
 
     # ChatInterface wires the chat() function to the Gradio chatbot component
-    chat = gr.ChatInterface(
+    chat_interface = gr.ChatInterface(
         fn=chat,
         type="messages",
         chatbot=gr.Chatbot(
@@ -133,7 +133,7 @@ with gr.Blocks() as gradio_app:
     )
 
     # When the page loads, populate the logout button label and post the greeting message
-    gradio_app.load(on_gradio_app_load, inputs=None, outputs=[logout_button, chat.chatbot])
+    gradio_app.load(on_gradio_app_load, inputs=None, outputs=[logout_button, chat_interface.chatbot])
 
 # Mount the Gradio app under /chat; check_auth guards every request to this path
 gr.mount_gradio_app(fastapi_app, gradio_app, path="/chat", auth_dependency=check_auth)
