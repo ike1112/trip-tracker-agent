@@ -21,11 +21,9 @@ live in `helpers.py`, not here — only pytest fixtures belong here.
 import importlib
 import os
 import sys
-from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import boto3
-import jwt as pyjwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa

@@ -84,7 +84,7 @@ def chat(message, history, request: gr.Request):
         timeout=30,  # seconds – Lambda cold-start can add latency
     )
 
-    # Surface auth errors clearly so the user knows to re-login
+    # Surface auth errors so the user knows to re-login
     if agent_response.status_code == 401 or agent_response.status_code == 403:
         return f"Agent returned authorization error. Try to re-login. Status code: {agent_response.status_code}"
 

@@ -108,6 +108,26 @@ def test_B8_hs256_token_returns_401(app_module, rsa_keypair):
     assert response["statusCode"] == 401
 
 
+def test_B8b_alg_none_forged_token_returns_401(app_module):
+    """Parity with agent-authorizer A5: a hand-crafted alg=none token must
+    not authenticate. PyJWT 2.x rejects this by default when algorithms is
+    pinned to RS256, but the test pins the property so a library swap or
+    pin change goes red here, not in production."""
+    import base64
+    import json
+
+    def b64(payload):
+        return base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
+
+    header = b64({"alg": "none", "typ": "JWT", "kid": "test-kid"})
+    body = b64({"sub": "user-1", "username": "alice", "exp": 9999999999})
+    forged = f"{header}.{body}."  # empty signature segment
+
+    app, _ = app_module
+    response = app.handler(make_event(forged), None)
+    assert response["statusCode"] == 401
+
+
 # ---------------------------------------------------------------------------
 # Handler robustness — drive the 400-on-bad-input fix
 # ---------------------------------------------------------------------------
