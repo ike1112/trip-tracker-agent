@@ -82,13 +82,21 @@ def create_watch(
     user_id: str,
     origin: Any,
     destination: str,
+    destination_airport: str,
     date_window: dict,
     pax: int,
     max_total_price: float,
     preferences: Optional[dict] = None,
     alert_strategy: str = "both",
 ) -> dict:
-    """Insert a new active watch and return the row that was written."""
+    """Insert a new active watch and return the row that was written.
+
+    `destination` is the user-facing city ("Tokyo") used for hotel search
+    and alert prose; `destination_airport` is the IATA code ("NRT") the
+    flight search uses. Two fields because hotels are city-scoped while
+    flights are airport-scoped — the poller has no LLM to resolve one
+    from the other at search time, so both must be stored on the watch.
+    """
     watch_id = uuid.uuid4().hex
     now = _now_iso()
     item = {
@@ -97,6 +105,7 @@ def create_watch(
         "type": "specific",
         "origin": origin,
         "destination": destination,
+        "destinationAirport": destination_airport,
         "dateWindow": date_window,
         "pax": pax,
         "maxTotalPrice": max_total_price,
@@ -223,12 +232,18 @@ def make_watch_tools(user_id: str) -> list:
             "the user when the total drops or hits an anomaly low. "
             "Always echo every field back to the user in plain English and "
             "wait for confirmation before calling this tool. Never invent "
-            "values for missing fields — ask the user."
+            "values for missing fields — ask the user. You must always "
+            "supply both the destination city name (for hotel search and "
+            "alert prose) AND the primary IATA airport code (for flight "
+            "search). Use the airport you would book if a passenger asked "
+            "for that city — e.g. Tokyo → NRT, London → LHR, Paris → CDG. "
+            "Multi-airport cities pick the most common: New York → JFK."
         ),
     )
     def add_watch(
         origin: Any,
         destination: str,
+        destinationAirport: str,
         earliestDepart: str,
         latestDepart: str,
         nights: int,
@@ -239,7 +254,8 @@ def make_watch_tools(user_id: str) -> list:
         """
         Args:
             origin: Airport code (e.g. "SFO") or list of codes (e.g. ["SFO","OAK"]).
-            destination: City name (e.g. "Tokyo"); expanded to airports at search time.
+            destination: City name (e.g. "Tokyo"), used for hotel search + prose.
+            destinationAirport: IATA airport code (e.g. "NRT"), used for flight search.
             earliestDepart: ISO date YYYY-MM-DD of earliest departure.
             latestDepart:   ISO date YYYY-MM-DD of latest departure.
             nights: Number of nights at the destination.
@@ -258,6 +274,7 @@ def make_watch_tools(user_id: str) -> list:
             user_id=user_id,
             origin=origin,
             destination=destination,
+            destination_airport=destinationAirport,
             date_window=date_window,
             pax=pax,
             max_total_price=maxTotalPrice,

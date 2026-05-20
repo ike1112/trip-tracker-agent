@@ -103,16 +103,24 @@ def _emf_value(emf, name):
 #   w-dedup    → flight  900 + hotel 100 = 1000; lastAlertedPrice 1000 → dedup blocks
 # ---------------------------------------------------------------------------
 
-WATCH_PRICES = {
-    "Tokyo":  ("1100.00", "300.00"),  # w-alert
-    "Osaka":  ("500.00",  "200.00"),  # w-anomaly
-    "Paris":  ("1500.00", "500.00"),  # w-noalert
-    "Rome":   ("900.00",  "100.00"),  # w-dedup
+# Flight responder keys on IATA, hotel responder keys on city. Both
+# point at the same logical watch — keep the two halves in lockstep.
+FLIGHT_PRICES = {
+    "NRT":  "1100.00",  # w-alert (Tokyo)
+    "KIX":  "500.00",   # w-anomaly (Osaka)
+    "CDG":  "1500.00",  # w-noalert (Paris)
+    "FCO":  "900.00",   # w-dedup (Rome)
+}
+HOTEL_PRICES = {
+    "Tokyo": "300.00",
+    "Osaka": "200.00",
+    "Paris": "500.00",
+    "Rome":  "100.00",
 }
 
 
 def _flight_for(_tool, args, _claims):
-    flight_total, _ = WATCH_PRICES[args["destination"]]
+    flight_total = FLIGHT_PRICES[args["destination"]]
     return 200, _ok({"source": "fixture", "offers": [{
         "id": f"off_{args['destination']}", "totalAmount": flight_total, "currency": "USD",
         "slices": [
@@ -129,7 +137,7 @@ def _flight_for(_tool, args, _claims):
 
 
 def _hotel_for(_tool, args, _claims):
-    _, hotel_total = WATCH_PRICES[args["city"]]
+    hotel_total = HOTEL_PRICES[args["city"]]
     return 200, _ok({"source": "fixture", "hotels": [{
         "id": f"h_{args['city']}", "totalAmount": hotel_total, "currency": "USD",
         "hotelName": f"{args['city']} Test", "checkin": args["checkin"], "checkout": args["checkout"],

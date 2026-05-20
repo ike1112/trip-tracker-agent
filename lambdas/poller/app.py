@@ -93,11 +93,16 @@ def _poll_one(watch: dict) -> None:
     # Origin may be a string or a list (e.g. ["SFO","OAK","SJC"]) per design
     # spec §3 — pass through unchanged; the flights tool's zod schema accepts
     # both shapes.
+    # Flight search takes IATA, hotel search takes the city name. They
+    # are stored as distinct fields on the watch because the poller has
+    # no LLM in the loop to resolve city → airport at search time; a
+    # legacy watch missing destinationAirport fails loud (KeyError) and
+    # gets logged as watch_errored.
     flights_payload = call_flights(
         FLIGHTS_MCP_ENDPOINT,
         token,
         origin=watch["origin"],
-        destination=watch["destination"],
+        destination=watch["destinationAirport"],
         depart_date=depart,
         return_date=ret,
         pax=pax,

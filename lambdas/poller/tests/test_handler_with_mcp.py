@@ -198,13 +198,14 @@ def test_handler_calls_both_mcps_for_each_active_watch(app_module, monkeypatch):
     assert fl_users == sorted(["user-aaaa1111", "user-bbbb2222", "user-cccc3333"])
 
     # Argument shape — pull the london (w3) call which has preferences set.
-    london_flight = next(c for c in fl_srv.calls if c["arguments"]["destination"] == "London")
+    # Flight calls use IATA (LHR); hotel calls use the city name.
+    london_flight = next(c for c in fl_srv.calls if c["arguments"]["destination"] == "LHR")
     assert london_flight["arguments"]["maxStops"] == 0
     london_hotel = next(c for c in ht_srv.calls if c["arguments"]["city"] == "London")
     assert london_hotel["arguments"]["minStars"] == 5
 
     # Date math for the Paris watch — earliest 2026-12-20, 3 nights.
-    paris_flight = next(c for c in fl_srv.calls if c["arguments"]["destination"] == "Paris")
+    paris_flight = next(c for c in fl_srv.calls if c["arguments"]["destination"] == "CDG")
     assert paris_flight["arguments"]["departDate"] == "2026-12-20"
     assert paris_flight["arguments"]["returnDate"] == "2026-12-23"
 
@@ -236,9 +237,9 @@ def test_one_failing_mcp_does_not_block_other_watches(app_module, monkeypatch):
             }]}],
         }
 
-    # Custom flights responder: 500 for `dest=Paris`, 200 for everything else.
+    # Custom flights responder: 500 for `dest=CDG` (Paris), 200 for everything else.
     def flight_resp(record):
-        if record["arguments"]["destination"] == "Paris":
+        if record["arguments"]["destination"] == "CDG":
             return 500, b'{"error":"upstream"}'
         return 200, _ok_payload({"source": "fixture", "offers": [_flight_offer(record["arguments"])]})
 

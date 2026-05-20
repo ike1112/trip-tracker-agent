@@ -101,7 +101,8 @@ Two DynamoDB tables, on-demand billing.
 | `watchId` | string | uuid |
 | `type` | string | `"specific"` (v1); `"opportunity"` reserved for v1.5 |
 | `origin` | string \| string[] | Airport code or list (e.g., `["SFO","OAK","SJC"]`) |
-| `destination` | string | City name (e.g., `"Tokyo"`); expanded to airports inside `flights-mcp` |
+| `destination` | string | City name (e.g., `"Tokyo"`) — used for hotel search and alert prose |
+| `destinationAirport` | string | IATA code (e.g., `"NRT"`) — used for flight search by the poller |
 | `dateWindow` | object | `{earliestDepart, latestDepart, nights: int \| {min,max}}` |
 | `pax` | int | Passenger count |
 | `maxTotalPrice` | number | USD threshold for the simple alert path |
@@ -130,7 +131,7 @@ Two DynamoDB tables, on-demand billing.
 | `ttl` | number | Unix epoch, 90 days from `timestamp` (DDB TTL) |
 
 ### Schema decisions worth flagging
-- **`destination` is a city, not an airport.** Airport expansion happens at search time inside `flights-mcp`. This is a chat-UX concession: the user shouldn't have to know HND vs NRT.
+- **`destination` (city) and `destinationAirport` (IATA) are stored as separate fields.** Hotels are city-scoped; flights are airport-scoped. The chat agent extracts both at watch-creation time (the LLM knows Tokyo → NRT, London → LHR). The poller has no LLM in its loop, so it can't infer one from the other at search time — storing both up front keeps the scheduled path simple and decoupled from any city-IATA resolver. The user still describes the trip by city in chat; the airport lookup happens transparently inside `add_watch`.
 - **`bestOfferBlob` is denormalized.** Yes, it duplicates data also held inside Duffel/LiteAPI. But it lets the alert email say *"Lowest in 30 days: $1420 — AA non-stop on Oct 17, Park Hotel Tokyo"* without re-querying providers. Cheap storage; fast reads; simpler poller.
 - **`lastAlertedAt` + `lastAlertedPrice` live on the watch.** Enables the anti-spam dedup gate in §5 — don't re-alert if the new price isn't meaningfully lower than the last alert.
 - **`status: "paused"` is supported.** Cheaper than delete/recreate; lets the user mute a watch during an active trip.
@@ -146,7 +147,7 @@ Two DynamoDB tables, on-demand billing.
 
 | Tool | Purpose |
 |---|---|
-| `add_watch(origin, destination, dateWindow, nights, pax, maxTotalPrice, preferences)` | Create a watch from chat |
+| `add_watch(origin, destination, destinationAirport, dateWindow, nights, pax, maxTotalPrice, preferences)` | Create a watch from chat (LLM supplies both the destination city and the primary IATA) |
 | `list_watches()` | Return user's active watches with latest price snapshot |
 | `update_watch(watchId, **patches)` | Patch fields (e.g., "tighten to weekends only") |
 | `pause_watch(watchId)` / `resume_watch(watchId)` | Mute during an active trip |

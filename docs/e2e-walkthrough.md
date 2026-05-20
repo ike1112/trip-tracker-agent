@@ -49,7 +49,10 @@ Watch Tokyo in October, 5 nights from SFO, max $1500 total
 
 **Must do:** echo the structured watch back in plain English, **ask to
 confirm before saving**, and surface inferred values (the Oct 1–31 window,
-1 passenger) rather than silently assuming them. It must NOT have saved yet.
+1 passenger, the primary destination airport — Tokyo → NRT) rather than
+silently assuming them. It must NOT have saved yet. The airport code is
+what the poller passes to flight search later; the city name is what the
+hotel search and alert prose use.
 
 ---
 
@@ -178,3 +181,23 @@ This is the **chat path** only. The scheduled poller → Bedrock decision →
 SES alert email path is stubbed in this deploy and is exercised separately
 by the live run in `docs/launch-runbook.md`. Engineering findings and the
 bug fixes from the first run are recorded in `docs/e2e-test-runbook.md`.
+
+## Verifying the poller in fixture mode (optional)
+
+The poller can be manually invoked against the fixture data to confirm
+the FareHistory write path end-to-end without spending real provider
+calls. The fixtures live at `lambdas/{flights,hotels}-mcp/fixtures/`
+and are keyed `{origin}-{IATA}-{departDate}.json` for flights and
+`{city}-{checkin}.json` for hotels — so a watch whose
+`destinationAirport=NRT`, `destination=Tokyo`, `dateWindow.earliestDepart=2026-10-15`
+will match the bundled `SFO-NRT-2026-10-15.json` + `Tokyo-2026-10-15.json`
+pair.
+
+```
+aws lambda invoke --function-name trip-tracker-poller \
+  --payload '{}' --cli-binary-format raw-in-base64-out /tmp/poll.json
+```
+
+Then scan `FareHistory` — expect one row per active matching watch with
+`flightPrice=1148`, `hotelPrice=485`, `totalPrice=1633` and the booking
+deep link populated.

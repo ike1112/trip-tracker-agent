@@ -143,6 +143,7 @@ def make_watch(
     user_id: str = "u-12345678abcdef",
     watch_id: str = "w-001",
     destination: str = "Tokyo",
+    destination_airport: str = "NRT",
     origin: str = "SFO",
     max_total_price: float = 1500.0,
     preferences: dict | None = None,
@@ -162,6 +163,7 @@ def make_watch(
         "type": "specific",
         "origin": origin,
         "destination": destination,
+        "destinationAirport": destination_airport,
         "dateWindow": {
             "earliestDepart": "2026-10-15",
             "latestDepart": "2026-10-15",

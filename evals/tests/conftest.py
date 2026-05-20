@@ -98,6 +98,7 @@ def _make_default_watch() -> dict:
         "type": "specific",
         "origin": "SFO",
         "destination": "Tokyo",
+        "destinationAirport": "NRT",
         "dateWindow": {
             "earliestDepart": "2026-10-15",
             "latestDepart": "2026-10-15",

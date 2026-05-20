@@ -281,12 +281,27 @@ def _dec(value):
     return Decimal(str(value))
 
 
+# Tests use city names like "Tokyo"/"Paris" for destination — supply
+# matching IATA defaults so existing callers don't have to thread the
+# new field through. Real production watches get this from the LLM at
+# add_watch time.
+_TEST_CITY_TO_IATA = {
+    "Tokyo": "NRT",
+    "Osaka": "KIX",
+    "Paris": "CDG",
+    "London": "LHR",
+    "Rome": "FCO",
+    "New York": "JFK",
+}
+
+
 def make_watch(
     user_id: str,
     watch_id: str,
     *,
     status: str = "active",
     destination: str = "Tokyo",
+    destination_airport: str | None = None,
     earliest_depart: str = "2026-10-15",
     nights: int = 5,
     pax: int = 1,
@@ -297,12 +312,14 @@ def make_watch(
     origin="SFO",
 ) -> dict:
     """Synthetic Watches row matching design-spec §3 schema."""
+    airport = destination_airport or _TEST_CITY_TO_IATA.get(destination, destination)
     return {
         "userId": user_id,
         "watchId": watch_id,
         "type": "specific",
         "origin": origin,
         "destination": destination,
+        "destinationAirport": airport,
         "dateWindow": {
             "earliestDepart": earliest_depart,
             "latestDepart": earliest_depart,

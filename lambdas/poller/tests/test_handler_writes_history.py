@@ -70,8 +70,9 @@ def _serve(responder):
 # ---------------------------------------------------------------------------
 
 def _flights_responder(_tool, args):
-    """Vary the price by destination so we can pin specific FareHistory rows."""
-    base = {"Tokyo": "1148.00", "Paris": "850.00", "Rome": "1320.50"}
+    """Vary the price by IATA so we can pin specific FareHistory rows.
+    Flight calls receive the IATA airport code; hotels receive the city."""
+    base = {"NRT": "1148.00", "CDG": "850.00", "FCO": "1320.50"}
     total = base.get(args["destination"], "999.00")
     return 200, _ok({"source": "fixture", "offers": [
         {
@@ -145,7 +146,7 @@ def test_watch_with_empty_flight_response_writes_no_history(app_module, monkeypa
     app, watches, fare, log = app_module
 
     def flights(_tool, args):
-        if args["destination"] == "Paris":
+        if args["destination"] == "CDG":  # Paris IATA
             return 200, _ok({"source": "fixture-miss", "offers": []})
         return _flights_responder(_tool, args)
 
@@ -178,7 +179,7 @@ def test_non_usd_flight_offer_skips_watch_as_errored(app_module, monkeypatch):
     app, watches, fare, log = app_module
 
     def flights(_tool, args):
-        if args["destination"] == "Tokyo":
+        if args["destination"] == "NRT":  # Tokyo IATA
             return 200, _ok({"source": "live", "offers": [
                 {"id": "off_gbp", "totalAmount": "900.00", "currency": "GBP",
                  "slices": [{"stops": 0, "segments": [{

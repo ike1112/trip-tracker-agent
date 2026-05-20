@@ -23,6 +23,7 @@ def _make_watch(watches, user_id):
         user_id=user_id,
         origin="SFO",
         destination="Tokyo",
+        destination_airport="NRT",
         date_window={
             "earliestDepart": "2026-10-15",
             "latestDepart": "2026-10-20",
@@ -46,6 +47,7 @@ def test_create_watch_writes_full_schema(watches_module):
     assert w["type"] == "specific"
     assert w["origin"] == "SFO"
     assert w["destination"] == "Tokyo"
+    assert w["destinationAirport"] == "NRT"
     assert w["dateWindow"]["nights"] == 5
     assert w["pax"] == 1
     assert w["maxTotalPrice"] == 1500
