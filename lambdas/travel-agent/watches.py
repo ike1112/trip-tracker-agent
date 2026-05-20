@@ -99,6 +99,17 @@ def create_watch(
     """
     watch_id = uuid.uuid4().hex
     now = _now_iso()
+    # `lastAlertedAt` and `lastAlertedPrice` are deliberately ABSENT — not
+    # written as `None`. boto3 marshals Python `None` to a DDB `NULL`-
+    # valued attribute (attribute present, value typed NULL), which
+    # silently breaks the Notifier's dedup writeback: its condition
+    # `attribute_not_exists(lastAlertedAt) OR lastAlertedAt < :now`
+    # evaluates to `false` on a NULL-valued attribute (it exists, and
+    # NULL doesn't compare strictly less than a string timestamp), so
+    # every first-alert writeback would fail with
+    # ConditionalCheckFailedException and the dedup gate would never
+    # arm. Writing the keys as truly absent until the Notifier's first
+    # successful alert keeps the writer's intended semantics intact.
     item = {
         "userId": user_id,
         "watchId": watch_id,
@@ -112,8 +123,6 @@ def create_watch(
         "alertStrategy": alert_strategy,
         "preferences": preferences or {},
         "status": "active",
-        "lastAlertedAt": None,
-        "lastAlertedPrice": None,
         "createdAt": now,
         "updatedAt": now,
     }

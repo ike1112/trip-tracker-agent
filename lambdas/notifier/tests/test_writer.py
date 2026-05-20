@@ -114,6 +114,29 @@ def test_B4_write_raises_conflict_when_existing_in_the_future(watches_table_fixt
         writer.write_alert_state(watch, "1200.00")
 
 
+def test_B6_write_succeeds_on_legacy_null_valued_lastAlertedAt(watches_table_fixture):
+    """Legacy watches created before the create_watch fix carry
+    `lastAlertedAt`/`lastAlertedPrice` as DDB NULL-typed attributes
+    (boto3 marshals Python `None` that way). `attribute_not_exists`
+    returns false on those — the attribute IS there, just NULL. The
+    writer must treat NULL as semantically equivalent to "never
+    alerted" or the dedup gate never arms for the first alert on any
+    legacy row.
+    """
+    writer, table = watches_table_fixture
+    # Bypass the conftest helper (which omits these keys) and put a row
+    # that explicitly carries NULL-valued lastAlerted* — exactly the
+    # shape produced by the pre-fix create_watch in lambdas/travel-agent.
+    legacy_row = make_watch(user_id="u-B6", watch_id="w-B6")
+    legacy_row["lastAlertedAt"] = None
+    legacy_row["lastAlertedPrice"] = None
+    table.put_item(Item=legacy_row)
+    writer.write_alert_state({"userId": "u-B6", "watchId": "w-B6"}, "1200.00")
+    row = read_watch_row(table, "u-B6", "w-B6")
+    assert isinstance(row["lastAlertedAt"], str)
+    assert row["lastAlertedPrice"] == Decimal("1200.00")
+
+
 def test_B5_conflict_error_only_for_conditional_check_failure_code(watches_table_fixture):
     writer, table = watches_table_fixture
     # Forge a different ClientError code by patching update_item.

@@ -60,11 +60,12 @@ def _get_table():
 
 class WritebackConflictError(RuntimeError):
     """Raised when the conditional update's
-    `attribute_not_exists(lastAlertedAt) OR lastAlertedAt < :now`
-    check fails — i.e., the Watches row already has a `lastAlertedAt`
-    at or after the proposed new value. The alert email has already
-    been sent at this point; the handler swallows this and returns
-    200 so the SES delivery isn't lost."""
+    `attribute_not_exists(lastAlertedAt) OR lastAlertedAt = :null
+    OR lastAlertedAt < :now` check fails — i.e., the Watches row
+    already has a non-NULL `lastAlertedAt` at or after the proposed
+    new value. The alert email has already been sent at this point;
+    the handler swallows this and returns 200 so the SES delivery
+    isn't lost."""
 
 
 def _to_decimal(value: Any) -> Decimal:
@@ -98,12 +99,25 @@ def write_alert_state(watch: dict, snapshot_total_price: Any) -> None:
             UpdateExpression=(
                 "SET lastAlertedAt = :now, lastAlertedPrice = :price"
             ),
+            # Three "OK to write" cases:
+            #   1. attribute_not_exists — fresh watch, never alerted.
+            #   2. lastAlertedAt = :null — legacy watch where the agent
+            #      wrote `None` (DDB stores as a NULL-typed attribute).
+            #      Without this branch, every first-alert on a legacy
+            #      row would `ConditionalCheckFailedException` because
+            #      attribute_not_exists is false (the attribute IS
+            #      there) and `NULL < :now` is also false.
+            #   3. lastAlertedAt < :now — normal forward-progress write
+            #      protecting against out-of-order async retries.
             ConditionExpression=(
-                "attribute_not_exists(lastAlertedAt) OR lastAlertedAt < :now"
+                "attribute_not_exists(lastAlertedAt)"
+                " OR lastAlertedAt = :null"
+                " OR lastAlertedAt < :now"
             ),
             ExpressionAttributeValues={
                 ":now": now_iso,
                 ":price": price,
+                ":null": None,
             },
         )
     except Exception as e:

@@ -54,8 +54,12 @@ def test_create_watch_writes_full_schema(watches_module):
     assert w["preferences"] == {"maxStops": 1}
     assert w["status"] == "active"
     assert w["alertStrategy"] == "both"
-    assert w["lastAlertedAt"] is None
-    assert w["lastAlertedPrice"] is None
+    # `lastAlertedAt` / `lastAlertedPrice` are absent on a fresh watch
+    # (never written as None / NULL — see comment in create_watch for
+    # why; setting them as NULL silently breaks the notifier's dedup
+    # writeback condition).
+    assert "lastAlertedAt" not in w
+    assert "lastAlertedPrice" not in w
     assert w["createdAt"] == w["updatedAt"]
 
 
