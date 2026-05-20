@@ -33,6 +33,10 @@ jobs:
         run: npm install && npm test
         working-directory: lambdas/mcp-authorizer
 
+      - name: agent-authorizer tests
+        run: npm install && npm test
+        working-directory: lambdas/agent-authorizer
+
   python-tests:
     name: Python Lambda + evals tests
     runs-on: ubuntu-latest
