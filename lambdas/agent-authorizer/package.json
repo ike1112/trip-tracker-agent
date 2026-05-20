@@ -3,6 +3,9 @@
   "author": "Anton Aleksandrov",
   "license": "Apache-2.0",
   "description": "A simple API Gateway authorizer",
+  "scripts": {
+    "test": "node --import ./tests/setup.js --test --test-reporter=spec \"tests/*.test.js\""
+  },
   "dependencies": {
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.2.0",
