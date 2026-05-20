@@ -192,7 +192,7 @@ The system prompt (in `agent_config.py`) must enforce:
 - Never invent prices, airlines, hotel names, or availability not present in tool responses.
 
 ### Model choice
-- **Chat agent:** Claude Haiku 4.5 (`us.anthropic.claude-haiku-4-5-20251001-v1:0`). The chat-with-tool-calls pattern is well within Haiku's reasoning envelope and the cost discipline matches the personal/dev framing; the original spec called for Sonnet 4.6, revised after measuring Haiku 4.5 against the v1 chat patterns.
+- **Chat agent:** Claude Sonnet 4.5 (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`). The original spec called for Sonnet 4.6; 4.5 is the latest Sonnet version this account has an AWS Marketplace subscription for. The chat-with-tool-calls pattern fits comfortably inside Sonnet's reasoning envelope. A prior commit briefly defaulted to Haiku 4.5 for cost reasons; that was reverted on discovery that the account did not have a Haiku 4.5 marketplace subscription — see `docs/launch-runbook.md` Phase 0 for the marketplace-gate callout.
 - **Alert decision (in poller):** Claude Haiku 4.5 (`claude-haiku-4-5-20251001`). The decision is small and bounded; Haiku is fast and cheap.
 
 ---
