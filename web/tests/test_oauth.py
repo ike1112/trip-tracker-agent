@@ -69,7 +69,6 @@ def test_E4_callback_uri_comes_from_env_not_localhost(fastapi_app_with_routes):
     """The redirect_uri passed to authorize_redirect must come from
     OAUTH_CALLBACK_URI, not the hard-coded localhost default."""
     app, oauth_module = fastapi_app_with_routes
-    from fastapi.responses import RedirectResponse
     oauth_module.oauth.cognito.authorize_redirect = AsyncMock(
         return_value=RedirectResponse(url="https://x/")
     )

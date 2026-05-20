@@ -8,7 +8,7 @@ reimport the modules per test so module-level state cannot leak.
 
 import importlib
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -52,8 +52,10 @@ def fastapi_app_with_routes(oauth_module):
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-key")
 
-    # Patch the Authlib seams BEFORE registering routes so the route handlers
-    # close over the mocked methods.
+    # Patch the Authlib seams. Route handlers look up oauth.cognito.* at
+    # call time (closure on module-globals), so patching at any point before
+    # the request fires is fine — we do it here so tests inspect a single
+    # call_args/await_count surface per test.
     oauth_module.oauth.cognito.authorize_redirect = AsyncMock()
     oauth_module.oauth.cognito.authorize_access_token = AsyncMock()
 
