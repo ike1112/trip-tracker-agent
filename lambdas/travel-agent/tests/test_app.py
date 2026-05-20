@@ -8,15 +8,8 @@ agent invocation is mocked (see conftest.app_module).
 """
 
 import json
-import os
-import sys
 
-# Ensure conftest helpers are importable as a bare module even when the tests
-# directory has an __init__.py (package-mode import). pytest auto-loads
-# conftest.py for fixtures but does not add it to sys.modules as a bare name.
-sys.path.insert(0, os.path.dirname(__file__))
-
-from conftest import make_token, make_event
+from .helpers import make_token, make_event
 
 
 # ---------------------------------------------------------------------------
