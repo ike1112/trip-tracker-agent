@@ -28,7 +28,19 @@ fastapi_app = FastAPI()
 # cryptographically tied to secret_key, preventing the user from tampering with
 # its contents. On every subsequent request, the middleware reads that cookie and
 # makes its contents available via req.session (e.g. req.session["access_token"]).
-fastapi_app.add_middleware(SessionMiddleware, secret_key="secret")
+# Read the signing key from env and fail fast on missing, empty, or the
+# placeholder value. A weak signing key lets anyone with the source forge
+# session cookies and impersonate users.
+_session_secret_key = os.environ.get("SESSION_SECRET_KEY", "").strip()
+if not _session_secret_key:
+    raise RuntimeError(
+        "SESSION_SECRET_KEY env var is required and must be a strong random string"
+    )
+if _session_secret_key == "secret":
+    raise RuntimeError(
+        "SESSION_SECRET_KEY must not be the placeholder value 'secret'"
+    )
+fastapi_app.add_middleware(SessionMiddleware, secret_key=_session_secret_key)
 
 # Register the OAuth2 routes (/login, /callback, /logout) defined in oauth.py
 oauth.add_oauth_routes(fastapi_app)
