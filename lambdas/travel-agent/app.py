@@ -64,12 +64,19 @@ def handler(event: dict, ctx):
             "body": 'Unauthorized'
         }
 
-    # Capture request metadata separately from the prompt text. The source IP is
-    # included in the prompt as contextual signal; policy or auditing logic can
-    # use it without needing direct access to the raw API Gateway event later.
-    source_ip = event["requestContext"]["identity"]["sourceIp"]
-    request_body: dict = json.loads(event["body"])
-    prompt_text = request_body["text"]
+    try:
+        # Extract request metadata after auth succeeds. Wrapped so a malformed
+        # body or missing field returns a structured 400 instead of crashing
+        # the Lambda invocation (which API Gateway would surface as 502).
+        source_ip = event["requestContext"]["identity"]["sourceIp"]
+        request_body: dict = json.loads(event["body"])
+        prompt_text = request_body["text"]
+    except (KeyError, json.JSONDecodeError, TypeError):
+        l.error("malformed request body or missing required field", exc_info=True)
+        return {
+            "statusCode": 400,
+            "body": "Bad Request",
+        }
 
     # Build a single composite prompt at the boundary. This keeps the agent API
     # simple (one string in, one string out) while still giving the model enough
