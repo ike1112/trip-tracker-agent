@@ -1,23 +1,34 @@
 """
 Test fixtures for the travel-agent Lambda.
 
-The watches module reads its table names from env vars at import time and
-constructs boto3 resources eagerly. Tests need:
-  1. The env vars set BEFORE watches is imported.
-  2. moto's mock_aws active BEFORE the boto3 resource is created.
-  3. The actual DynamoDB tables created in the mock account.
+Two fixture families live here:
 
-The fixture below handles all three by creating tables under mock_aws and
-re-importing watches inside the mock context. Tests then receive a fresh
-watches module bound to the mocked tables.
+1. `watches_module` — boots a moto-mocked DynamoDB and reimports
+   watches.py inside the mock context. The module reads its table
+   names from env at import time, so the env must be set BEFORE
+   import and the boto3 resources must bind to moto's account.
+
+2. `rsa_keypair` / `other_rsa_keypair` / `app_module` — back the
+   handler tests. They generate RSA keypairs at session scope, stub
+   the `agent` module into sys.modules before importing app.py
+   (so the heavy Strands stack never loads), and patch the JWKS
+   client to return the test public key.
+
+Plain-function helpers used by tests (`make_token`, `make_event`)
+live in `helpers.py`, not here — only pytest fixtures belong here.
 """
 
 import importlib
 import os
 import sys
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock
 
 import boto3
+import jwt as pyjwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from moto import mock_aws
 
 WATCHES_TABLE = "TestWatches"
@@ -70,12 +81,6 @@ def watches_module():
 # ---------------------------------------------------------------------------
 # JWT + app-import fixtures (used by test_app.py)
 # ---------------------------------------------------------------------------
-
-import importlib
-from unittest.mock import MagicMock
-
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 @pytest.fixture(scope="session")
