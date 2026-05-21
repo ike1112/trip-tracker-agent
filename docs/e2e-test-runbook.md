@@ -284,5 +284,99 @@ that had never once been run.
 all hurt first impressions):** #1 README command, #2 `prep-web.sh`, #3
 `web/requirements.txt`, #4 stale "AcmeCorp" branding, #7 misleading
 catch-all error, #10 recreate-rotates-Cognito guard, #11 test-quality gap
-(add a Decimal-assertion test). The 5 code fixes are live on the deployed
-stack but **not yet committed to git** — commit them before `cdk destroy`.
+(add a Decimal-assertion test). The 5 code fixes from this run are now
+committed to git.
+
+---
+
+## Scheduled-path verification (2026-05-20, fixture + SES stub)
+
+The 2026-05-18 RESULT above proves the **chat path**. It does not exercise
+the **scheduled path** — the EventBridge poller → snapshot → Bedrock
+decision → SES notifier → dedup writeback. That path has no LLM in the loop
+to paper over data-shape mismatches, so it needs its own verification.
+Exercising it on 2026-05-20 surfaced two more silent bugs the chat run
+could not have caught.
+
+### Finding #12 — poller flight search passed a city name, not an IATA code
+
+`lambdas/poller/app.py` passed `watch["destination"]` (a city, e.g.
+"Tokyo") into flights-mcp, which keys both its fixture replay and its live
+Duffel queries on IATA airport codes ("NRT"). Every poll's flight lookup
+missed; `FareHistory` stayed empty. The chat path masked it because the LLM
+resolves the airport inside its tool call — the poller has no LLM and
+ships whatever the row stored. Fix (`55c0626`): split the stored field into
+`destination` (city — hotel search + alert prose) and `destinationAirport`
+(IATA — flight search); the chat agent extracts both at watch-creation
+time.
+
+### Finding #13 — NULL `lastAlertedAt` permanently disarmed the dedup gate
+
+`create_watch` initialized the row with `lastAlertedAt: None,
+lastAlertedPrice: None`. boto3's DynamoDB resource marshals Python `None`
+into a DDB `NULL`-typed attribute — present, not absent. The notifier's
+writeback condition `attribute_not_exists(lastAlertedAt) OR lastAlertedAt <
+:now` therefore evaluated false on both clauses, so the first writeback for
+every watch failed with `ConditionalCheckFailedException`. The handler logs
+that as `writeback_conflict` and returns 200 (SES already sent), so it
+never surfaced as an error code — only as a silently broken anti-spam
+guarantee: alerts would re-fire on every tick. The notifier's own tests
+missed it because `make_watch` in `notifier/tests/conftest.py` already
+omitted the keys when callers passed `None`, working around the production
+bug for test purposes. Fix (`479c54c`): omit the keys from the initial put
+(the notifier writes them on the first real alert) and harden the writer
+condition with an explicit `OR lastAlertedAt = :null` branch for legacy
+rows.
+
+### Step-by-step — verifying the scheduled path
+
+Prerequisites: the stack deployed cost-free (Step 1 above), and at least
+one **active** watch whose `origin` / `destinationAirport` / `destination`
+/ `dateWindow.earliestDepart` match a bundled fixture pair. Fixtures live
+at `lambdas/{flights,hotels}-mcp/fixtures/`, keyed
+`{origin}-{IATA}-{departDate}.json` for flights and `{city}-{checkin}.json`
+for hotels.
+
+1. **Snapshot-write check.** Use a watch matching `SFO-NRT-2026-10-15.json`
+   + `Tokyo-2026-10-15.json` (origin SFO, destinationAirport NRT,
+   destination Tokyo, earliestDepart 2026-10-15). Invoke the poller:
+   ```
+   aws lambda invoke --function-name trip-tracker-poller \
+     --payload '{}' --cli-binary-format raw-in-base64-out poll.json
+   ```
+   Poller logs should show `snapshot_written` with flight/hotel/total
+   prices; `FareHistory` should gain one row per matching watch.
+
+2. **Alert + writeback check.** Use a watch whose fixture total is **under
+   budget** so the threshold gate fires — e.g. the `LHR-CDG-2026-12-20`
+   pair (flight 142.30 + hotel 410.00 = 552.30) with `maxTotalPrice` 800.
+   Invoke the poller again. Expect `decision_made alert=true`, the notifier
+   invoked async, and notifier logs showing `notification_sent` (**not**
+   `writeback_conflict`). The watch's `Watches` row should now carry a real
+   `lastAlertedAt` ISO timestamp and `lastAlertedPrice`.
+
+3. **Dedup-gate check.** Wait ~10s for the `status-index` GSI to propagate
+   (ADR 0007 — eventually consistent), then invoke the poller once more.
+   The just-alerted watch should now log `decision_made alert=false
+   reason=dedup_blocked` — the gate is armed.
+
+### RESULT — scheduled-path run (2026-05-20, fixture + SES stub)
+
+| Check | Result |
+|---|---|
+| Snapshot write | PASS — Tokyo watch (NRT): `snapshot_written flight=1148 hotel=485 total=1633`; `decision_made alert=false` (over the $1500 budget, no history) |
+| Alert + writeback | PASS — Paris watch (CDG, budget 800): `decision_made alert=true`, notifier invoked; writeback accepted on a legacy NULL row → `lastAlertedAt=2026-05-20T19:17:52.664673+00:00`, `lastAlertedPrice=552.3` |
+| Dedup gate | PASS — after GSI propagation, both Paris and Tokyo log `decision_made alert=false reason=dedup_blocked` |
+| Unit suite | PASS — 459 green (208 poller + 18 watches + 127 notifier + 106 evals) |
+
+**Scope caveats — what this run did *not* prove:**
+
+- **Fixture + SES stub only.** Live Duffel / LiteAPI / SES is untested;
+  that is the live run in `launch-runbook.md`.
+- **The Bedrock decision step was stubbed** (`bedrockMode=stub`). The alert
+  in check #2 fired with `reason=stub` — the snapshot → decision →
+  notifier → writeback → dedup *plumbing* is proven, but the real Bedrock
+  decision call in that path is not.
+- **The threshold and anomaly gates were not exercised against accrued
+  history** (`history=0` on every run). The dedup gate is proven; the
+  30-day anomaly window is not.
