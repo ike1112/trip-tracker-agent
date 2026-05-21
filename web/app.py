@@ -1,12 +1,21 @@
 # Standard library and third-party imports
 import os
+from typing import Any
 from starlette.middleware.sessions import SessionMiddleware  # Adds server-side session support to the app
 from fastapi import FastAPI, Request, HTTPException           # Core FastAPI components
 import dotenv       # Loads environment variables from a .env file
 import uvicorn      # ASGI server used to run the FastAPI app
-import gradio as gr # UI framework for building the chat interface
 import httpx        # Async-capable HTTP client for calling the agent endpoint
-import oauth        # Local module that handles OAuth2 / Cognito login flows
+
+try:
+    import oauth  # Local module that handles OAuth2 / Cognito login flows
+except ModuleNotFoundError:
+    oauth = None
+
+try:
+    import gradio as gr  # UI framework for building the chat interface
+except ModuleNotFoundError:
+    gr = None
 
 # Load environment variables from .env (if present); values can be overridden by the shell environment
 dotenv.load_dotenv()
@@ -43,7 +52,8 @@ if _session_secret_key == "secret":
 fastapi_app.add_middleware(SessionMiddleware, secret_key=_session_secret_key)
 
 # Register the OAuth2 routes (/login, /callback, /logout) defined in oauth.py
-oauth.add_oauth_routes(fastapi_app)
+if oauth is not None:
+    oauth.add_oauth_routes(fastapi_app)
 
 
 def check_auth(req: Request):
@@ -63,7 +73,7 @@ def check_auth(req: Request):
     return username
 
 
-def chat(message, history, request: gr.Request):
+def chat(message, history, request: Any):
     """
     Gradio chat handler called every time the user sends a message.
     - Retrieves the authenticated username and bearer token from the session.
@@ -97,7 +107,7 @@ def chat(message, history, request: gr.Request):
     return response_text
 
 
-def on_gradio_app_load(request: gr.Request):
+def on_gradio_app_load(request: Any):
     """
     Called once when the Gradio page first loads for an authenticated user.
     Returns two values that are mapped to the logout button label and the
@@ -117,38 +127,39 @@ def on_gradio_app_load(request: gr.Request):
 # ---------------------------------------------------------------------------
 # Gradio UI definition
 # ---------------------------------------------------------------------------
-with gr.Blocks() as gradio_app:
-    # Page title shown above the chat interface
-    header = gr.Markdown("Trip Tracker — combined flight + hotel price watch")
+if gr is not None:
+    with gr.Blocks() as gradio_app:
+        # Page title shown above the chat interface
+        header = gr.Markdown("Trip Tracker — combined flight + hotel price watch")
 
-    # Collapsible section that shows the system architecture diagram
-    with gr.Accordion("Architecture (click to open)", open=False):
-        gr.Image(value='arch.png', show_label=False)
+        # Collapsible section that shows the system architecture diagram
+        with gr.Accordion("Architecture (click to open)", open=False):
+            gr.Image(value='arch.png', show_label=False)
 
-    # ChatInterface wires the chat() function to the Gradio chatbot component
-    chat_interface = gr.ChatInterface(
-        fn=chat,
-        type="messages",
-        chatbot=gr.Chatbot(
+        # ChatInterface wires the chat() function to the Gradio chatbot component
+        chat_interface = gr.ChatInterface(
+            fn=chat,
             type="messages",
-            label="Track a trip's flight + hotel price over time",
-            avatar_images=(user_avatar, bot_avatar),
-            placeholder="<b>Trip Tracker</b> — describe a trip and I'll watch its price."
+            chatbot=gr.Chatbot(
+                type="messages",
+                label="Track a trip's flight + hotel price over time",
+                avatar_images=(user_avatar, bot_avatar),
+                placeholder="<b>Trip Tracker</b> — describe a trip and I'll watch its price."
+            )
         )
-    )
 
-    # Logout button uses a small JS snippet to navigate to the /logout route
-    logout_button = gr.Button(value="Logout", variant="secondary")
-    logout_button.click(
-        fn=None,
-        js="() => window.location.href='/logout'"
-    )
+        # Logout button uses a small JS snippet to navigate to the /logout route
+        logout_button = gr.Button(value="Logout", variant="secondary")
+        logout_button.click(
+            fn=None,
+            js="() => window.location.href='/logout'"
+        )
 
-    # When the page loads, populate the logout button label and post the greeting message
-    gradio_app.load(on_gradio_app_load, inputs=None, outputs=[logout_button, chat_interface.chatbot])
+        # When the page loads, populate the logout button label and post the greeting message
+        gradio_app.load(on_gradio_app_load, inputs=None, outputs=[logout_button, chat_interface.chatbot])
 
-# Mount the Gradio app under /chat; check_auth guards every request to this path
-gr.mount_gradio_app(fastapi_app, gradio_app, path="/chat", auth_dependency=check_auth)
+    # Mount the Gradio app under /chat; check_auth guards every request to this path
+    gr.mount_gradio_app(fastapi_app, gradio_app, path="/chat", auth_dependency=check_auth)
 
 if __name__ == "__main__":
     # Start the ASGI server, listening on all interfaces at port 8000.
