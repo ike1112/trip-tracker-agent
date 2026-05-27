@@ -28,11 +28,14 @@ from tests.conftest import (
     make_watch,
 )
 
+TEST_MESSAGE_ID = "test-msg-id-0001"
+
 
 def _import_handler_with_log_capture():
     """Reimport `app` and attach a MemoryLogHandler to its logger.
     Returns `(app_module, log_handler)`."""
     app = _import_notifier_module("app")
+    app.send = lambda *args, **kwargs: {"MessageId": TEST_MESSAGE_ID}
     handler = MemoryLogHandler()
     app.logger.addHandler(handler)
     return app, handler
@@ -85,14 +88,14 @@ def test_A5_handler_response_includes_message_id_from_ses():
     app, _ = _import_handler_with_log_capture()
     with patch.object(app, "write_alert_state"):
         response = app.handler(make_handler_event(), MagicMock())
-    assert response["messageId"].startswith("stub-")
+    assert response["messageId"] == TEST_MESSAGE_ID
 
 
 def test_A6_handler_call_order_is_template_then_ses_then_writer():
     app, _ = _import_handler_with_log_capture()
     calls = []
     with patch.object(app, "render", side_effect=lambda *a, **kw: (calls.append("render"), ("s", "b"))[1]):
-        with patch.object(app, "send", side_effect=lambda *a, **kw: (calls.append("send"), {"MessageId": "stub-12345678"})[1]):
+        with patch.object(app, "send", side_effect=lambda *a, **kw: (calls.append("send"), {"MessageId": TEST_MESSAGE_ID})[1]):
             with patch.object(app, "write_alert_state", side_effect=lambda *a, **kw: calls.append("write")):
                 app.handler(make_handler_event(), MagicMock())
     assert calls == ["render", "send", "write"]
@@ -245,7 +248,7 @@ def test_D4_writeback_conflict_log_includes_message_id():
         app.handler(make_handler_event(), MagicMock())
     conflicts = [r for r in log_handler.records if r.msg == "writeback_conflict"]
     assert hasattr(conflicts[0], "message_id")
-    assert conflicts[0].message_id.startswith("stub-")
+    assert conflicts[0].message_id == TEST_MESSAGE_ID
 
 
 def test_D5_writer_raising_unexpected_clienterror_propagates():
@@ -349,7 +352,7 @@ def test_F3_notification_sent_log_includes_message_id():
         app.handler(make_handler_event(), MagicMock())
     sent = [r for r in log_handler.records if r.msg == "notification_sent"]
     assert hasattr(sent[0], "message_id")
-    assert sent[0].message_id.startswith("stub-")
+    assert sent[0].message_id == TEST_MESSAGE_ID
 
 
 def test_F4_notification_sent_log_does_not_include_recipient_email():

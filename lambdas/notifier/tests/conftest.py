@@ -2,10 +2,9 @@
 Test fixtures for the trip-tracker notifier Lambda.
 
 Mirrors the choreography in `lambdas/poller/tests/conftest.py`:
-modules under test bind boto3 resources at first call (writer.py
-lazily), and stub vs live mode is selected at module import. We
-manage both with a per-test reimport fixture so each case starts from
-clean module state.
+modules under test bind boto3 resources at first call (writer.py and
+ses_client.py lazily). We manage imports with a per-test reimport
+fixture so each case starts from clean module state.
 """
 
 from __future__ import annotations
@@ -23,7 +22,6 @@ import pytest
 from moto import mock_aws
 
 
-os.environ.setdefault("SES_MODE", "stub")
 os.environ.setdefault("NOTIFIER_SENDER_EMAIL", "alerts@example.test")
 os.environ.setdefault("NOTIFIER_RECIPIENT_EMAIL", "user@example.test")
 os.environ.setdefault("WATCHES_TABLE_NAME", "TestWatches")
@@ -53,7 +51,6 @@ class MemoryLogHandler(logging.Handler):
 
 _MODULES_TO_POP = ("ses_client", "email_template", "writer", "app")
 _ENV_TO_PRESERVE = (
-    "SES_MODE",
     "NOTIFIER_SENDER_EMAIL",
     "NOTIFIER_RECIPIENT_EMAIL",
     "WATCHES_TABLE_NAME",
@@ -75,17 +72,13 @@ def _reset_module_state():
         sys.modules.pop(name, None)
 
 
-def _import_notifier_module(name: str, *, ses_mode: str | None = "stub"):
-    """Reimport a notifier module with the given SES_MODE.
+def _import_notifier_module(name: str):
+    """Reimport a notifier module with clean module state.
 
     Pops the requested module + every notifier module that imports it
     so we get a clean dependency graph. Returns the freshly-loaded
     module instance.
     """
-    if ses_mode is None:
-        os.environ.pop("SES_MODE", None)
-    else:
-        os.environ["SES_MODE"] = ses_mode
     # Pop in reverse dependency order: app -> writer/ses_client/email_template.
     for m in reversed(_MODULES_TO_POP):
         sys.modules.pop(m, None)

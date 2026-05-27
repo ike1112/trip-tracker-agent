@@ -1,9 +1,9 @@
-"""End-to-end tests for the notifier handler — exercises the full
-template -> SES (stub) -> writer (moto DDB) pipeline in one call with
+"""End-to-end tests for the notifier handler: exercises the full
+template -> SES client mock -> writer (moto DDB) pipeline in one call with
 a realistic poller-output payload.
 
 Test groups:
-  A: full pipeline with stub SES + moto DDB
+  A: full pipeline with mocked SES + moto DDB
   B: out-of-order retry guard via seeded future timestamp
   C: idempotency under repeated invocations
 """
@@ -29,18 +29,18 @@ from tests.conftest import (
     make_handler_event,
     make_snapshot,
     make_watch,
+    mock_ses_client_with_send_email_response,
     read_watch_row,
     seed_watch_row,
 )
 
 
 @pytest.fixture
-def e2e_app():
+def e2e_app(monkeypatch):
     """Stand up moto DDB + Watches table, reimport the notifier
     module graph against that environment, yield
     `(app_module, writer_module, table, log_handler)`."""
     os.environ["WATCHES_TABLE_NAME"] = WATCHES_TABLE
-    os.environ["SES_MODE"] = "stub"
     with mock_aws():
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
         _create_watches_table(ddb)
@@ -49,6 +49,8 @@ def e2e_app():
         for name in ("app", "writer", "email_template", "ses_client"):
             sys.modules.pop(name, None)
         ses_client = importlib.import_module("ses_client")
+        mock_ses = mock_ses_client_with_send_email_response("test-msg-id-0001")
+        monkeypatch.setattr(ses_client, "_get_client", lambda: mock_ses)
         email_template = importlib.import_module("email_template")
         writer = importlib.import_module("writer")
         app = importlib.import_module("app")
@@ -103,7 +105,7 @@ def test_A3_e2e_watches_row_lastAlertedAt_is_recently_written(e2e_app):
     assert before <= written <= after
 
 
-def test_A4_e2e_stub_ses_message_id_matches_stub_prefix(e2e_app):
+def test_A4_e2e_returns_message_id_from_mocked_ses(e2e_app):
     app, _, table, _ = e2e_app
     watch = make_watch(user_id="u-A4", watch_id="w-A4")
     seed_watch_row(table, watch)
@@ -111,9 +113,7 @@ def test_A4_e2e_stub_ses_message_id_matches_stub_prefix(e2e_app):
         make_handler_event(snapshot=make_snapshot(watch_id="w-A4"), watch=watch),
         MagicMock(),
     )
-    mid = response["messageId"]
-    assert mid.startswith("stub-")
-    assert len(mid) == len("stub-") + 8
+    assert response["messageId"] == "test-msg-id-0001"
 
 
 def test_A5_e2e_notification_sent_log_record_present_exactly_once(e2e_app):
@@ -180,11 +180,10 @@ def test_B3_e2e_seeded_future_lastAlertedAt_emits_writeback_conflict_log(e2e_app
 # Group C — idempotency under repeat
 # ===========================================================================
 
-def test_C1_two_back_to_back_invocations_yield_identical_stub_message_id(e2e_app, monkeypatch):
-    """Same payload + frozen clock -> same message_id from the stub
-    SES (deterministic hash of inputs). The second invocation hits
-    the WritebackConflictError path because lastAlertedAt now equals
-    the frozen `now`."""
+def test_C1_two_back_to_back_invocations_yield_same_mock_message_id(e2e_app, monkeypatch):
+    """Same mocked SES response across two calls. The second invocation
+    hits the WritebackConflictError path because lastAlertedAt now
+    equals the frozen `now`."""
     app, writer, table, _ = e2e_app
     freeze_now(monkeypatch, writer, "2026-10-15T12:00:00+00:00")
     watch = make_watch(user_id="u-C1", watch_id="w-C1")

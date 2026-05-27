@@ -191,7 +191,6 @@ Common CDK context keys consumed in this folder:
 - lambdaTimeoutSeconds
 - notifierSenderEmail
 - notifierRecipientEmail
-- sesMode
 - budgetAlarmEmail
 
 If these are missing or malformed, many constructs intentionally throw at synth time to prevent broken deploys.
