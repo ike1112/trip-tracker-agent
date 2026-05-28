@@ -1,233 +1,663 @@
-# Launch Runbook — Live Deploy, 7-Day Real Run, Demo
+# Launch Runbook: Fixture Rehearsal and Live Evidence Run
 
-Closes the open launch-checklist items: live deploy, a real price-watch run
-producing a genuine 7-day trend, one honest alert email, demo recording, and
-surfacing inspectable proof in the README. Ordered by dependency — the
-slow-to-approve items come first so the 7-day clock starts as early as
-possible. Check items off as you go.
+This runbook has two separate tracks:
 
-Objective: a reviewer who forks this repo comes away convinced it works.
-Everything here is evidence, not features. No new scope.
+- **Track A: Fixture/Stub Rehearsal** deploys the stack with fixture travel
+  providers, stubbed poller Bedrock decisions, and real SES sends. Use it to
+  verify infrastructure, Cognito, the web UI, and fixture-mode behavior before
+  spending time on live evidence.
+- **Track B: Live Launch** deploys with real Duffel, LiteAPI, Bedrock poller
+  decisions, SES email, and the 7-day price-watch evidence run.
 
-This runbook was hardened by a CEO + engineering + outside-voice review.
-The one non-reversible thing in this whole project is the 7-day wall-clock
-run — most of the rigor below exists to keep a silent failure from costing
-you a week you can't buy back.
+All command blocks are written for Windows `cmd.exe`. Replace every
+`PUT_..._HERE` value before running a command.
 
----
+## What The Stack Deploys
 
-## Phase 0 — Accounts and access (start first; approval lag)
+Both tracks deploy the same CDK stack, `TripTrackerStack`, defined by
+`bin/trip-tracker.js` and `lib/trip-tracker-stack.js`.
 
-- [ ] **AWS account** — `aws configure` done. Run `aws sts get-caller-identity`
-      and confirm the account/ARN is the one you intend to deploy to. Note
-      the **deploy region**: `__________` (must offer Bedrock + the models below).
-- [ ] **Bedrock model access** — enable the **exact** models the code uses,
-      in the deploy region. Do not trust prose; read the IDs from source so
-      this can't rot:
-      - Chat agent: `lib/agent.js` `DEFAULT_AGENT_BEDROCK_MODEL_ID`
-        (currently `us.anthropic.claude-haiku-4-5-20251001-v1:0` — a `us.`
-        inference profile over Claude Haiku 4.5). Enable model access for the
-        **underlying foundation model** (`anthropic.claude-haiku-4-5-20251001-v1:0`)
-        in every US region the profile routes to (the IAM grant in `agent.js`
-        enumerates them).
-      - Poller decision: `lambdas/poller/bedrock_decide.py` `DEFAULT_MODEL_ID`
-        (currently `claude-haiku-4-5-20251001`).
-- [ ] **AWS Marketplace gate (the non-obvious one).** Anthropic models on
-      Bedrock now require an account-level AWS Marketplace subscription. A
-      brand-new IAM principal in this account that has never invoked the
-      model will hit:
-      `AccessDeniedException ... aws-marketplace:ViewSubscriptions, aws-marketplace:Subscribe`
-      even though Bedrock model access shows ACTIVE. Symptom is identical
-      to a missing IAM grant. Fix: do the model-access request through the
-      **Bedrock console** ("Manage model access"), not by editing IAM —
-      the console flow handles the marketplace subscription as part of the
-      request, clearing the gate stack-wide. A subscription created this
-      way persists across stack destroy/recreate at the account level,
-      but a fresh IAM principal in a different account starts the gate
-      over.
-- [ ] **Duffel** → **live access token** (not test). Search is free; Duffel
-      charges on booking only and this system never books. Confirm the account
-      is **activated for live search** (some Duffel accounts gate live access);
-      a token that returns 403/empty on live search blocks the whole run.
-- [ ] **LiteAPI** → production key (sandbox returns canned data). Confirm the
-      key returns non-empty real results for a test city before you rely on it.
-- [ ] **SES** — stay in the SES sandbox (no production-access wait for one
-      recipient). **SES must be in the same region you deploy to** (or
-      `notifier` config must point at the SES region explicitly — check
-      `lib/`/notifier config); a region mismatch makes email silently fail.
-      Verify **both** identities in that region: sender (`notifierSenderEmail`)
-      and recipient (`notifierRecipientEmail`).
+The stack creates:
 
-## Phase 1 — Local prerequisites (first-run deploy blockers)
+- Cognito demo users and hosted-login configuration for the web UI.
+- API Gateway endpoints for the chat agent and MCP servers.
+- Lambda functions for the travel agent, authorizers, flights MCP, hotels MCP,
+  poller, and notifier.
+- DynamoDB `Watches` and `FareHistory` tables.
+- Secrets Manager signing secrets for per-component JWTs.
+- EventBridge schedule for the poller.
+- CloudWatch dashboard and Lambda logs.
+- AWS Budget named `trip-tracker-monthly-cost`.
+- SES send permission for the configured sender email.
 
-- [ ] `cdk bootstrap` has been run for **this account + deploy region**
-      (`aws cloudformation describe-stacks --stack-name CDKToolkit` succeeds).
-- [ ] Node + Python versions match the project (CI uses Python 3.12; see
-      `requirements-test.txt` / `.github/workflows/ci.yml`).
-- [ ] Docker daemon running and your user can run `docker ps` without sudo
-      (CDK bundles the Python Lambdas at deploy; tests skip bundling, a real
-      deploy does not).
-- [ ] `npm install` at repo root, then per-Lambda installs for
-      `agent-authorizer`, `mcp-authorizer`, `flights-mcp`, `hotels-mcp`.
-- [ ] `cp .env.example .env`, fill keys from Phase 0 (kept handy; CDK reads
-      `-c` context, not a runtime `.env`).
-- [ ] Sanity gate before spending: `npm test` + `npm run test:node` +
-      `python -m pytest evals/tests -q` pass locally (fixture/stub —
-      zero cost). If these fail, stop here.
+`--require-approval never` makes CDK non-interactive after the command starts.
+Use it only after you have reviewed the command, AWS account, region, and
+context values.
 
-## Phase 2 — Deploy live
+## Shared Phase 0: Local Setup
 
-- [ ] Review the IAM diff CDK prints before approving.
-- [ ] Deploy:
-      ```
-      cdk deploy -c mcpMode=live -c duffelApiKey=… -c liteApiKey=… \
-                 -c bedrockMode=live -c sesMode=live \
-                 -c notifierSenderEmail=… -c notifierRecipientEmail=…
-      ```
-- [ ] Record the stack outputs (Lambda function names, API URLs) — you need
-      the poller function name in Phase 3.
-- [ ] **Budget alarm must be ACTIVE before any live poll.** Click the
-      Budgets/SNS confirmation email, then verify it is actually confirmed:
-      `aws budgets describe-budgets` shows the $10 budget and
-      `aws sns list-subscriptions` shows the alarm subscription as
-      **Confirmed** (not `PendingConfirmation`). An unconfirmed subscription
-      is a silent backstop failure.
+Run this once before either track.
 
-## Phase 3 — Verify the deploy works end to end (gate before the clock)
+- [ ] Open `cmd.exe` in the repo root, the directory containing `package.json`
+  and `cdk.json`.
 
-The clock does not start until **every** box here is checked. A clean deploy
-that can't actually reach Bedrock/Duffel/LiteAPI is the failure that wastes
-the week.
+  ```bat
+  cd
+  dir package.json cdk.json
+  ```
 
-- [ ] `./prep-web.sh`, then web UI: `cd web` → venv →
-      `pip install -r requirements.txt` → `python app.py` →
-      `http://localhost:8000/chat/`, log in as `Alice`.
-- [ ] **Pick the watched route by criteria, not vibe.** Requirements: a
-      high-liquidity origin/destination pair; departure **4–10 weeks out**
-      (far enough to be priced, near enough to have inventory); a date window
-      that isn't a holiday/seasonal anomaly; both legs return **USD**. Record
-      the chosen route + dates here: `__________`.
-- [ ] **Chat path exercises Bedrock live.** Create the trend watch in chat
-      (the route above). The agent echoing a structured watch back proves
-      web → API GW → agent → Bedrock works end to end on the real model.
-- [ ] **Live search works:** *"How much is <dest> right now?"* returns a real
-      non-zero headline number — proves live Duffel + LiteAPI keys are good.
-- [ ] **Poller path exercises Bedrock + providers live.** Manually invoke the
-      poller Lambda (name from Phase 2 outputs):
-      ```
-      aws lambda invoke --function-name <POLLER_FN_NAME> \
-        --payload '{}' --cli-binary-format raw-in-base64-out /tmp/poll.json
-      ```
-      The poller ignores `event` (EventBridge envelope), so `{}` is correct.
-      Success = CloudWatch logs show `snapshot_written` with **non-null
-      numeric** `flight_price` AND `hotel_price`, then `poll_complete` with
-      `watches_errored: 0`. A `snapshot_skipped` line means no qualifying
-      offers → fix the route/dates and retry; **do not** start the clock on a
-      skip.
-- [ ] Confirm one real `FareHistory` row exists for the trend watch with
-      non-null numeric `flightPrice` + `hotelPrice` (query DynamoDB directly,
-      not just "a row exists").
+- [ ] Confirm tool versions:
 
-## Phase 4 — The two watches and the 7-day clock
+  ```bat
+  node --version
+  python --version
+  docker ps
+  cdk --version
+  aws --version
+  ```
 
-Two watches, deliberately separated so neither contaminates the other.
+  Expected:
 
-**Watch TREND** (the headline evidence — runs the full 7 days):
-- [ ] Set `maxTotalPrice` **well below** the current live total so it will
-      **not** alert. Pure price-over-time evidence; no alert noise.
-- [ ] Start date: `__________`  →  target evidence date (+7d): `__________`.
-- [ ] Definition of "works" for this artifact (be explicit so a flat line is
-      still defensible): poller fires every 4h → ≈ **42 scheduled polls** over
-      7 days. Accept **≥ 38** `FareHistory` rows (allows a few missed
-      ticks/retries), every row non-null numeric on both legs. A flat price
-      curve is acceptable evidence **only** when the row count proves polling
-      ran — annotate it "stable market over the window," not a broken poller.
+  - Node.js: `v22.x`
+  - Python: `3.12.x`
+  - Docker daemon reachable without elevation
 
-**Daily success gate (abort + restart, do not skip):**
-- [ ] **End of Day 1** and **End of Day 2**: query `FareHistory` for Watch
-      TREND. Expected rows so far ≈ (hours elapsed / 4). If rows are missing,
-      sparse, or null on either leg → **STOP the clock**. Root-cause: route
-      liquidity, expired/invalid keys, EventBridge schedule disabled, or
-      live-vs-fixture parse divergence (`snapshot_skipped` / `watch_errored`
-      in logs). Fix it, **reset the start date above, and restart the 7-day
-      clock.** Catching this on Day 1 costs 1 day; catching it in Phase 6
-      costs the whole week.
-- [ ] Days 3–7: one dashboard spot-check/day (last-poll advancing, error
-      count flat).
+- [ ] Confirm AWS identity and region:
 
-**Watch ALERT** (one honest alert email — created ~1 day before recording):
-- [ ] Create a second short-lived watch near recording day. Set its
-      `maxTotalPrice` just **above its own** current live total. Trace
-      (verified against `gates.py`): `lastAlertedPrice` is None → dedup gate
-      open; total < maxTotalPrice → threshold passes; Bedrock decides → exactly
-      one honest alert on the next poll. The model-written reason in that
-      email is the thing ADR 0004 exists to justify.
-- [ ] After the alert email lands and is captured (Phase 6), archive Watch
-      ALERT. Its `FareHistory` is **never** used for the trend curve — no
-      contamination.
+  ```bat
+  aws sts get-caller-identity
+  aws configure get region
+  ```
 
-## Phase 5 — During the wait (documentation edits, not app code)
+  Record:
 
-Markdown/doc changes only — but still run a link + screenshot-path pass so
-nothing rots on the first reviewer click. Do these while the clock runs.
+  - AWS account ID: `____________________`
+  - AWS region: `____________________`
 
-- [ ] **README first-screen layout target** (avoid evidence soup — one tight
-      "Proof it works" block, everything else linked not inlined). Order:
-      1. one-line pitch
-      2. 60-second fixture-mode try (use the quickstart command block in README)
-      3. architecture diagram link
-      4. **Proof it works** — ≤4 bullets: eval chat-pattern pass rate;
-         decision-quality score; link to `evals/results/2026-05-13-baseline.md`;
-         link to exported raw evidence (`docs/evidence/`, Phase 6)
-      5. **What would change for real production** (lifted from
-         production-readiness spec §4.6 item 7)
-      6. deeper links (specs, ADRs, threat model)
-- [ ] **Pre-empt the LLM-in-the-loop attack.** One line near the README
-      Bedrock mention **and** in ADR 0004 pointing at the eval
-      decision-quality numbers as the evidence the reason line earns its
-      Bedrock call.
-- [ ] Write `docs/demo-script.md` from production-readiness spec §4.7
-      (0:00–1:30 outline) so the recording is one clean take.
+- [ ] Bootstrap CDK in the deploy account and region if needed:
 
-## Phase 6 — After ~7 days: capture, EXPORT, then record
+  ```bat
+  aws cloudformation describe-stacks --stack-name CDKToolkit
+  ```
 
-Screenshots alone are fragile. Export inspectable raw evidence **before**
-`cdk destroy` — once the stack is gone the logs/metrics are gone.
+  If the stack does not exist:
 
-- [ ] **Export sanitized raw evidence to `docs/evidence/` and commit it:**
-      - Watch TREND `FareHistory` rows as JSON/CSV. Drop/truncate `userId`
-        (Cognito sub); `watchId` is a uuid, safe to keep for correlation.
-      - CloudWatch log excerpts: `snapshot_written`, `decision_made`,
-        `poll_complete` lines across the run.
-- [ ] Screenshot the price trend (status check / "lowest in N days"). The
-      shot must show a **timestamp** and the **watchId** so it correlates to
-      the exported rows.
-- [ ] Screenshot/save the Watch ALERT email (model-written reason visible).
-- [ ] Screenshot the CloudWatch dashboard — timestamp visible, account
-      number cropped/redacted.
-- [ ] Record the demo per `docs/demo-script.md`. If Loom, also commit a
-      fallback GIF/stills — hiring reviewers hit this months later and Loom
-      links rot.
-- [ ] Place screenshots where the README layout (Phase 5) expects them.
+  ```bat
+  cdk bootstrap aws://PUT_ACCOUNT_ID_HERE/PUT_REGION_HERE
+  ```
 
-## Phase 7 — Close out
+- [ ] Install Node dependencies:
 
-- [ ] CI-green visibility (precise, not "it's green somewhere"): link the
-      latest passing GitHub Actions run on **`main`**, or add a status badge
-      to the README top. (Repo is public, `main` CI is currently green.)
-- [ ] Tick the production-readiness spec §5 boxes that this run closes
-      (7-day post-launch item + the evidence-surfacing items added here;
-      note in the spec that the eval-link / production-delta items are new
-      relative to its original §5 list).
-- [ ] `cdk destroy` — **only after** `docs/evidence/` is committed and all
-      screenshots/recording are captured. Verify the export is in git first.
+  ```bat
+  npm ci
+  npm --prefix lambdas/agent-authorizer ci
+  npm --prefix lambdas/mcp-authorizer ci
+  npm --prefix lambdas/flights-mcp ci
+  npm --prefix lambdas/hotels-mcp ci
+  ```
 
----
+- [ ] Install the pinned Python test environment:
 
-## Cost note
+  ```bat
+  python -m venv .venv-tests
+  .venv-tests\Scripts\activate.bat
+  python -m pip install --upgrade pip
+  python -m pip install -r requirements-test.txt
+  ```
 
-Bedrock decisions ~2–3/day on Haiku (cents). Duffel/LiteAPI search free (no
-booking). Watch ALERT adds one extra Bedrock call + one SES send — still
-cents. Dominant risk is a runaway poll loop, not per-call cost — the $10
-Budgets alarm must be **ACTIVE** (Phase 2) before the clock starts. Expected
-spend for the run: under $1. `cdk destroy` (Phase 7) stops all of it.
+- [ ] Create a local deploy scratch file:
+
+  ```bat
+  copy .env.example .env
+  notepad .env
+  ```
+
+  CDK does not read `.env`; it is a gitignored scratch pad for deploy values.
+
+## Shared Phase 1: Pre-Deploy Tests
+
+All commands run from the repo root.
+
+- [ ] CDK construct tests:
+
+  ```bat
+  npm test
+  ```
+
+- [ ] Node Lambda and authorizer tests:
+
+  ```bat
+  npm --prefix lambdas/agent-authorizer test
+  npm --prefix lambdas/mcp-authorizer test
+  npm --prefix lambdas/flights-mcp test
+  npm --prefix lambdas/hotels-mcp test
+  ```
+
+- [ ] Python Lambda, web, and eval tests:
+
+  ```bat
+  .venv-tests\Scripts\python.exe -m pytest lambdas/poller/tests -q
+  cd lambdas\notifier
+  ..\..\.venv-tests\Scripts\python.exe -m pytest tests -q
+  cd ..\..
+  .venv-tests\Scripts\python.exe -m pytest lambdas/travel-agent/tests -q
+  cd web
+  ..\.venv-tests\Scripts\python.exe -m pytest tests -q
+  cd ..
+  cd evals
+  ..\.venv-tests\Scripts\python.exe -m pytest tests -q
+  cd ..
+  ```
+
+Stop here if any gate fails.
+
+## Track A: Fixture/Stub Rehearsal
+
+Use this track for a deploy rehearsal. It validates CDK, Cognito, the web app,
+fixture MCP responses, the poller decision stub, real SES email sends from the
+notifier, the dashboard, and the budget construct.
+
+Important caveat: the chat agent still uses Bedrock live by default, even in
+fixture/stub deploys. Enable access for the agent model in Bedrock unless you
+also change the agent implementation.
+
+### Fixture Phase A0: Access Requirements
+
+- [ ] Bedrock access is enabled for the chat agent model:
+  `us.anthropic.claude-sonnet-4-5-20250929-v1:0`.
+- [ ] AWS Marketplace access for Anthropic models is cleared through the
+  Bedrock console **Manage model access** flow.
+- [ ] `notifierSenderEmail`, `notifierRecipientEmail`, and `budgetAlarmEmail`
+  are valid addresses. `notifierSenderEmail` must be verified in SES; if your
+  SES account is still in sandbox, `notifierRecipientEmail` must be verified too.
+
+### Fixture Phase A1: Deploy Fixture Stack
+
+Run from the repo root:
+
+```bat
+cdk deploy ^
+  --require-approval never ^
+  -c mcpMode=fixture ^
+  -c bedrockMode=stub ^
+  -c notifierSenderEmail=isabelkeyan@gmail.com ^
+  -c notifierRecipientEmail=isabelkeyan@gmail.com ^
+  -c budgetAlarmEmail=isabelkeyan@gmail.com
+```
+
+### Fixture Phase A2: Save Outputs
+
+```bat
+aws cloudformation describe-stacks ^
+  --stack-name TripTrackerStack ^
+  --query "Stacks[0].Outputs" ^
+  --output table
+```
+
+```bat
+for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'PollerFunctionName')]|[0].OutputValue" --output text`) do set POLLER_FN_NAME=%A
+for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'FareHistoryTableName')]|[0].OutputValue" --output text`) do set FARE_HISTORY_TABLE_NAME=%A
+for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'WatchesTableName')]|[0].OutputValue" --output text`) do set WATCHES_TABLE_NAME=%A
+echo %POLLER_FN_NAME%
+echo %FARE_HISTORY_TABLE_NAME%
+echo %WATCHES_TABLE_NAME%
+```
+
+### Fixture Phase A3: Web Smoke Test
+
+- [ ] Prepare the web app. `prep-web.sh` is a POSIX shell script; from
+  `cmd.exe`, run it through `bash` if Git Bash or WSL provides `bash` on your
+  PATH. It writes `web\.env`, including a generated `SESSION_SECRET_KEY` for
+  the web session cookie:
+
+  ```bat
+  bash ./prep-web.sh
+  ```
+
+- [ ] Start the web UI in a separate `cmd.exe` terminal:
+
+  ```bat
+  cd web
+  python -m venv .venv
+  .venv\Scripts\activate.bat
+  python -m pip install --upgrade pip
+  python -m pip install -r requirements.txt
+  python app.py
+  ```
+
+- [ ] Open `http://localhost:8000/chat/` and log in as `Alice`.
+- [ ] Run this exact fixture chat script.
+
+  Input 1:
+
+  ```text
+  Hi
+  ```
+
+  Expected output: the agent greets `Alice` and describes the trip-price
+  tracking workflow.
+
+  Input 2:
+
+  ```text
+  Watch Tokyo from SFO to NRT, departure window October 15 to October 15, 2026, 5 nights, 1 passenger, max total price $1500.
+  ```
+
+  Expected output: the agent echoes the full Tokyo watch in plain English and
+  asks for confirmation before saving.
+
+  Input 3:
+
+  ```text
+  Yes, confirmed. Create this watch.
+  ```
+
+  Expected output: the agent confirms the watch was created. Verify one new
+  active Tokyo row exists in DynamoDB.
+
+  Input 4:
+
+  ```text
+  What's happening with my watches?
+  ```
+
+  Expected output: one readable headline for the active Tokyo watch.
+
+  Input 5:
+
+  ```text
+  How much is Tokyo right now for SFO to NRT on October 15, 2026 for 5 nights?
+  ```
+
+  Expected output: a fixture-backed flight + hotel price for Tokyo.
+
+### Fixture Phase A4: Optional Fixture Cleanup
+
+Destroy the fixture stack if you are done rehearsing and do not want it to
+remain in the account.
+
+```bat
+cdk destroy
+```
+
+## Track B: Live Launch
+
+Use this track only after the shared tests pass and fixture rehearsal is good.
+This is the evidence-producing path: real travel providers, real poller
+Bedrock decision, real SES email, and a 7-day `FareHistory` trend.
+
+### Live Phase B0: Live Access Requirements
+
+- [ ] Bedrock model access is enabled in the deploy region.
+
+  Current defaults:
+
+  - Chat agent: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+    from `lib/agent.js`.
+  - Poller decision: `claude-haiku-4-5-20251001`
+    from `lib/poller-server.js` and `lambdas/poller/bedrock_decide.py`.
+
+  For the chat agent's `us.` inference profile, enable the underlying
+  foundation model in `us-east-1`, `us-east-2`, and `us-west-2`.
+
+- [ ] AWS Marketplace access for Anthropic Bedrock models is cleared through
+  the Bedrock console **Manage model access** flow.
+- [ ] Duffel live access token is available. It must not be a test token.
+- [ ] LiteAPI production key is available. It must not be sandbox/canned data.
+- [ ] SES sender and recipient identities are verified in the deploy region.
+  Staying in the SES sandbox is acceptable for this launch if both identities
+  are verified.
+- [ ] `.env` contains:
+
+  - `duffelApiKey`
+  - `liteApiKey`
+  - `notifierSenderEmail`
+  - `notifierRecipientEmail`
+  - `budgetAlarmEmail` if different from the alert recipient
+
+### Live Phase B1: Deploy Live Stack
+
+Run from the repo root:
+
+```bat
+cdk deploy ^
+  --require-approval never ^
+  -c mcpMode=live ^
+  -c duffelApiKey=PUT_DUFFEL_LIVE_TOKEN_HERE ^
+  -c liteApiKey=PUT_LITEAPI_PROD_KEY_HERE ^
+  -c bedrockMode=live ^
+  -c notifierSenderEmail=PUT_VERIFIED_SES_SENDER_EMAIL_HERE ^
+  -c notifierRecipientEmail=PUT_VERIFIED_SES_RECIPIENT_EMAIL_HERE ^
+  -c budgetAlarmEmail=PUT_BUDGET_ALARM_EMAIL_HERE
+```
+
+### Live Phase B2: Save Outputs And Confirm Budget
+
+```bat
+aws cloudformation describe-stacks ^
+  --stack-name TripTrackerStack ^
+  --query "Stacks[0].Outputs" ^
+  --output table
+```
+
+```bat
+for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'PollerFunctionName')]|[0].OutputValue" --output text`) do set POLLER_FN_NAME=%A
+for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'FareHistoryTableName')]|[0].OutputValue" --output text`) do set FARE_HISTORY_TABLE_NAME=%A
+for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'WatchesTableName')]|[0].OutputValue" --output text`) do set WATCHES_TABLE_NAME=%A
+echo %POLLER_FN_NAME%
+echo %FARE_HISTORY_TABLE_NAME%
+echo %WATCHES_TABLE_NAME%
+```
+
+```bat
+aws budgets describe-budget ^
+  --account-id PUT_ACCOUNT_ID_HERE ^
+  --budget-name trip-tracker-monthly-cost
+```
+
+Confirm the budget notification email is received by `budgetAlarmEmail` or
+`notifierRecipientEmail` before starting any live polling.
+
+### Live Phase B3: Live Smoke Test
+
+The 7-day clock does not start until every item in this phase is complete.
+
+- [ ] Prepare the web app:
+
+  ```bat
+  bash ./prep-web.sh
+  ```
+
+  This writes `web\.env`, including a generated `SESSION_SECRET_KEY` for the
+  web session cookie. If you already have a `web\.env` from an older run and
+  only need to add the missing key:
+
+  ```bat
+  python -c "import secrets; print('SESSION_SECRET_KEY=' + secrets.token_urlsafe(48))" >> web\.env
+  ```
+
+- [ ] Start the web UI in a separate `cmd.exe` terminal:
+
+  ```bat
+  cd web
+  python -m venv .venv
+  .venv\Scripts\activate.bat
+  python -m pip install --upgrade pip
+  python -m pip install -r requirements.txt
+  python app.py
+  ```
+
+- [ ] Open `http://localhost:8000/chat/` and log in as `Alice`.
+
+- [ ] Choose the trend-watch trip.
+
+  Criteria:
+
+  - high-liquidity origin/destination
+  - departure 4 to 10 weeks out
+  - non-holiday date window
+  - both flight and hotel prices returned in USD
+
+  Record:
+
+  - Origin: `__________`
+  - Destination: `__________`
+  - Departure window: `__________`
+  - Nights: `__________`
+
+- [ ] Create the trend watch through chat.
+
+  Input:
+
+  ```text
+  Watch DESTINATION from ORIGIN to DESTINATION_AIRPORT, departure window EARLIEST_DEPART_DATE to LATEST_DEPART_DATE, NIGHTS nights, 1 passenger, max total price MAX_TOTAL_PRICE.
+  ```
+
+  Example:
+
+  ```text
+  Watch Tokyo from SFO to NRT, departure window October 15 to October 15, 2026, 5 nights, 1 passenger, max total price $1500.
+  ```
+
+  Expected output: the agent echoes the full watch in plain English and asks
+  for confirmation before saving.
+
+  Confirmation input:
+
+  ```text
+  Yes, confirmed. Create this watch.
+  ```
+
+  Expected output: the agent confirms the watch was created.
+
+  The structured watch response proves:
+
+  `web -> API Gateway -> travel-agent Lambda -> Bedrock -> DynamoDB`
+
+- [ ] Verify live provider search in chat.
+
+  ```text
+  How much is DESTINATION right now for ORIGIN to DESTINATION_AIRPORT on EARLIEST_DEPART_DATE for NIGHTS nights?
+  ```
+
+  Expected output: a real non-zero price.
+
+- [ ] Invoke the poller manually:
+
+  ```bat
+  echo {}> empty.json
+  aws lambda invoke ^
+    --function-name %POLLER_FN_NAME% ^
+    --payload file://empty.json ^
+    --cli-binary-format raw-in-base64-out ^
+    poll.json
+  type poll.json
+  ```
+
+- [ ] Check poller logs:
+
+  ```bat
+  aws logs filter-log-events ^
+    --log-group-name /aws/lambda/%POLLER_FN_NAME% ^
+    --filter-pattern "snapshot_written" ^
+    --max-items 10
+
+  aws logs filter-log-events ^
+    --log-group-name /aws/lambda/%POLLER_FN_NAME% ^
+    --filter-pattern "poll_complete" ^
+    --max-items 10
+  ```
+
+  Required:
+
+  - `snapshot_written` exists
+  - `flight_price` is numeric and non-null
+  - `hotel_price` is numeric and non-null
+  - `poll_complete` shows `watches_errored: 0`
+
+  If logs show `snapshot_skipped`, choose a better route/date window and retry.
+  Do not start the 7-day clock on a skipped snapshot.
+
+- [ ] Record the trend watch ID:
+
+  ```bat
+  echo {"#s":"status"}> expr-names.json
+  aws dynamodb scan ^
+    --table-name %WATCHES_TABLE_NAME% ^
+    --projection-expression "userId, watchId, #s, origin, destination, departDate, returnDate, maxTotalPrice" ^
+    --expression-attribute-names file://expr-names.json ^
+    --output table
+  ```
+
+  Watch TREND ID: `____________________`
+
+- [ ] Confirm the first `FareHistory` row:
+
+  ```bat
+  set WATCH_TREND_ID=PUT_WATCH_TREND_ID_HERE
+  echo {":w":{"S":"%WATCH_TREND_ID%"}}> watch-key.json
+  aws dynamodb query ^
+    --table-name %FARE_HISTORY_TABLE_NAME% ^
+    --key-condition-expression "watchId = :w" ^
+    --expression-attribute-values file://watch-key.json ^
+    --output table
+  ```
+
+  Required: at least one row with numeric `flightPrice`, `hotelPrice`, and
+  `totalPrice`.
+
+### Live Phase B4: Run The 7-Day Trend Watch
+
+Use two separate watches.
+
+**Watch TREND**
+
+- [ ] Set `maxTotalPrice` well below the current live total so this watch does
+  not alert.
+- [ ] Start timestamp: `____________________`
+- [ ] Target evidence timestamp, 7 days later: `____________________`
+- [ ] Expected cadence: every 240 minutes unless `pollIntervalMinutes` was
+  changed at deploy.
+- [ ] Expected rows over 7 days: about 42.
+- [ ] Minimum acceptable rows: 38, all with numeric non-null `flightPrice`,
+  `hotelPrice`, and `totalPrice`.
+
+Daily gate:
+
+```bat
+aws dynamodb query ^
+  --table-name %FARE_HISTORY_TABLE_NAME% ^
+  --key-condition-expression "watchId = :w" ^
+  --expression-attribute-values file://watch-key.json ^
+  --select COUNT
+```
+
+Check at the end of Day 1 and Day 2. If rows are missing, sparse, or null on
+either price leg, stop the clock, fix the issue, reset the start timestamp, and
+restart the 7-day run.
+
+Likely causes:
+
+- route/date window has poor inventory
+- provider key expired or is not live-enabled
+- EventBridge rule disabled
+- Bedrock/model access failure
+- fixture-vs-live parsing drift
+
+**Watch ALERT**
+
+- [ ] Create this watch near demo-recording day.
+- [ ] Set `maxTotalPrice` just above the watch's current live total.
+- [ ] Let the next poll send one alert.
+- [ ] Screenshot or save the email with the model-written reason visible.
+- [ ] Archive this watch after capture.
+
+Never use Watch ALERT rows for the 7-day trend curve.
+
+### Live Phase B5: Documentation During The Wait
+
+Documentation changes are safe while the 7-day clock runs.
+
+- [ ] Update README first-screen proof block:
+
+  1. one-line pitch
+  2. fixture-mode quickstart
+  3. architecture diagram link
+  4. proof bullets with links to eval results and `docs/evidence/`
+  5. production-readiness delta
+  6. deeper links: specs, ADRs, threat model
+
+- [ ] Add a short line near Bedrock/ADR 0004 references explaining why the
+  model decision earns its runtime call: it is backed by eval
+  decision-quality evidence.
+- [ ] Draft `docs/demo-script.md` for a 60-90 second recording.
+
+### Live Phase B6: Export Evidence Before Teardown
+
+Run from the repo root after the 7-day window completes.
+
+- [ ] Create the evidence directory:
+
+  ```bat
+  if not exist docs\evidence mkdir docs\evidence
+  ```
+
+- [ ] Export Watch TREND rows:
+
+  ```bat
+  set WATCH_TREND_ID=PUT_WATCH_TREND_ID_HERE
+  echo {":w":{"S":"%WATCH_TREND_ID%"}}> watch-key.json
+  aws dynamodb query ^
+    --table-name %FARE_HISTORY_TABLE_NAME% ^
+    --key-condition-expression "watchId = :w" ^
+    --expression-attribute-values file://watch-key.json ^
+    --output json > docs\evidence\fare-history-trend.json
+  ```
+
+  Redact or truncate `userId` values before committing. Keep `watchId`; it is
+  needed to correlate rows, screenshots, and logs.
+
+- [ ] Export poller log evidence:
+
+  ```bat
+  aws logs filter-log-events ^
+    --log-group-name /aws/lambda/%POLLER_FN_NAME% ^
+    --filter-pattern "snapshot_written" ^
+    --output json > docs\evidence\poller-snapshot-written.json
+
+  aws logs filter-log-events ^
+    --log-group-name /aws/lambda/%POLLER_FN_NAME% ^
+    --filter-pattern "decision_made" ^
+    --output json > docs\evidence\poller-decision-made.json
+
+  aws logs filter-log-events ^
+    --log-group-name /aws/lambda/%POLLER_FN_NAME% ^
+    --filter-pattern "poll_complete" ^
+    --output json > docs\evidence\poller-poll-complete.json
+  ```
+
+- [ ] Capture screenshots:
+
+  - trend chart or status view, with timestamp and watch ID visible
+  - Watch ALERT email, with model-written reason visible
+  - CloudWatch dashboard, with timestamp visible and account number redacted
+  - any demo stills/GIF fallback if using an external recording link
+
+- [ ] Commit evidence:
+
+  ```bat
+  git status docs/evidence/
+  git add docs/evidence/
+  git commit -m "Add launch evidence exports"
+  git log -1 --stat -- docs/evidence/
+  ```
+
+### Live Phase B7: Demo And Teardown
+
+- [ ] Record the demo from `docs/demo-script.md`.
+- [ ] Add README links to:
+
+  - committed evidence files
+  - screenshots
+  - demo recording or fallback stills
+  - latest passing GitHub Actions run on `main`, or a status badge
+
+- [ ] Mark the corresponding production-readiness checklist items complete.
+- [ ] Destroy only after evidence is committed and screenshots are captured:
+
+  ```bat
+  cdk destroy
+  ```
+
+## Cost Guardrails
+
+Expected live-run cost is under $1:
+
+- Bedrock Haiku/Sonnet calls: low volume, cents-scale
+- Duffel/LiteAPI search: no booking, search-only
+- SES: one alert email
+- DynamoDB/EventBridge/Lambda: personal-scale usage
+
+The practical cost risk is a runaway poll loop or misconfigured cadence. Keep
+the `trip-tracker-monthly-cost` AWS Budget in place before live polling, and
+run `cdk destroy` after evidence capture.
