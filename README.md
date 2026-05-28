@@ -60,15 +60,17 @@ You ──chat──> Web UI (Cognito-gated) ──JWT──> API Gateway
                           Notifier Lambda ──> SES email (ADR 0005)
 ```
 
-Complete architecture — every AWS service, all 8 Lambdas with their
-tools, both data flows, and the trust boundaries, as diffable ASCII:
-[`docs/architecture.md`](./docs/architecture.md). Icon version:
+Complete architecture — every AWS service, all 8 Lambdas with their tools,
+both data flows, and the trust boundaries — lives in the diagram:
 [`docs/diagrams/trip-tracker-architecture.drawio`](./docs/diagrams/trip-tracker-architecture.drawio)
 (rendered PNG: [`trip-tracker-architecture.png`](./docs/diagrams/trip-tracker-architecture.png)).
+For the per-component rationale see [`docs/DESIGN.md`](./docs/DESIGN.md); for
+user flows and sequence diagrams see [`docs/SYSTEM.md`](./docs/SYSTEM.md);
+for trust boundaries see [`docs/threat-model.md`](./docs/threat-model.md).
 
 **Poller and notifier flow**
 
-<img src="./docs/self-reflection/poller-notifier-flowchart.svg" alt="Poller and notifier flowchart" width="100%">
+<img src="./docs/diagrams/poller-notifier-flowchart.svg" alt="Poller and notifier flowchart" width="100%">
 
 For the full system guide — personas, user stories, user flows, and
 end-to-end sequence diagrams — see

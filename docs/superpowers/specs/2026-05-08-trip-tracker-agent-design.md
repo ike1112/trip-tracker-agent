@@ -1,9 +1,13 @@
 # Trip Tracker Agent — Design Spec
 
-**Date:** 2026-05-08
-**Status:** Approved (brainstorming complete; ready for implementation planning)
-**Owner:** Isabel
-**Repo basis:** `sample-serverless-mcp-servers/strands-agent-on-lambda` (existing Strands + Bedrock + Lambda + Cognito + MCP scaffold)
+| Field | Value |
+|---|---|
+| Date | 2026-05-08 |
+| Status | Approved; brainstorming complete, ready for implementation planning |
+| Owner | Isabel |
+| Repo basis | `sample-serverless-mcp-servers/strands-agent-on-lambda` |
+
+Repo basis context: existing Strands + Bedrock + Lambda + Cognito + MCP scaffold.
 
 ---
 
@@ -35,50 +39,52 @@ Not a Booking.com replacement. Not a public service. Not a multi-user product (t
 
 ## 2. Architecture
 
-### What's reused from the existing repo
-- Agent-on-Lambda pattern (Strands + Bedrock)
-- Cognito JWT auth + custom Lambda authorizer
-- S3 session manager for multi-turn conversation state
-- MCP server pattern (one server per external integration)
-- Web UI shell
+### Starting point: AWS sample repo
 
-### What's new
-- Two DynamoDB tables (`Watches`, `FareHistory`)
-- EventBridge schedule + Poller Lambda
-- Notifier Lambda + SES
-- Two replacement MCP servers: `flights-mcp` (wraps Duffel), `hotels-mcp` (wraps LiteAPI)
-- Local tools added to the Travel Agent Lambda for watch CRUD
+This project starts from the AWS sample
+`sample-serverless-mcp-servers/strands-agent-on-lambda`. The sample provides
+the serverless agent foundation:
 
-### What's removed
-- The travel-domain stub data and the demo "agent-to-agent" flow if not used
+- Agent-on-Lambda pattern using Strands + Bedrock.
+- Cognito login and JWT-based request authorization.
+- S3-backed session memory for multi-turn conversations.
+- MCP server pattern for tool integrations. The sample MCPs were dummy/demo
+  placeholders; this project replaces them with provider-backed MCP servers
+  that support both fixture replay and live API calls.
+- A lightweight web UI shell.
 
-### High-level diagram
+Those pieces are reused as infrastructure patterns, not as the final product.
 
-```mermaid
-flowchart LR
-    User([You]) -->|chat| WebUI[Web UI<br/>Cognito-gated]
-    WebUI -->|JWT| API[API Gateway]
-    API --> Agent[Travel Agent Lambda<br/>Strands + Bedrock]
+### Trip-tracker-specific work
 
-    Agent <-->|local tools| WL[(Watches DDB)]
-    Agent <-->|local tools| FH[(Fare History DDB)]
-    Agent <-->|MCP over HTTPS| FlightsMCP[flights-mcp Lambda]
-    Agent <-->|MCP over HTTPS| HotelsMCP[hotels-mcp Lambda]
+The trip tracker turns that sample scaffold into a real price-watch system:
 
-    FlightsMCP -->|search_offers| Duffel[(Duffel API)]
-    HotelsMCP -->|search_offers| LiteAPI[(LiteAPI)]
+- Adds DynamoDB `Watches` and `FareHistory` tables.
+- Adds local watch CRUD tools inside the Travel Agent Lambda.
+- Replaces sample MCP/demo tooling with `flights-mcp` for Duffel and
+  `hotels-mcp` for LiteAPI; each can run against committed fixtures or live
+  provider APIs.
+- Adds an EventBridge-driven Poller Lambda that checks active watches on a
+  schedule.
+- Adds alert decision logic and a Notifier Lambda that sends SES email.
+- Adds production-hardening artifacts around the implementation: fixture mode,
+  structured logs, X-Ray, CI, ADRs, threat model, budget alarm, and launch
+  runbooks.
 
-    EB[EventBridge<br/>cron every 4h] --> Poller[Poller Lambda]
-    Poller -->|read watches| WL
-    Poller -->|search| FlightsMCP
-    Poller -->|search| HotelsMCP
-    Poller -->|write prices| FH
-    Poller -->|alert-worthy?<br/>Bedrock call| Decide{{Decision}}
-    Decide -->|yes| Notifier[Notifier Lambda]
-    Notifier --> SES[SES] --> Inbox([Your Inbox])
+In short: the AWS sample supplies the agent/serverless skeleton; this project
+supplies the trip-tracking product behavior and production-readiness layer.
 
-    Agent -->|S3 session memory| S3[(S3)]
-```
+### Architecture diagrams
+
+Maintained architecture references live outside this original design spec:
+
+- [`../../diagrams/trip-tracker-architecture.png`](../../diagrams/trip-tracker-architecture.png)
+- [`../../diagrams/trip-tracker-architecture.drawio`](../../diagrams/trip-tracker-architecture.drawio)
+- [`../../DESIGN.md`](../../DESIGN.md) (per-component rationale)
+- [`../../SYSTEM.md`](../../SYSTEM.md) (flows + sequence diagrams)
+
+This design spec captures the original product and system intent. The files
+above are the maintained architecture references.
 
 ### Deliberate boundaries
 - **MCP servers are isolated per provider.** Changing Duffel doesn't touch LiteAPI. Each MCP server is a separately-deployable Lambda with its own IAM role and secrets.
@@ -143,13 +149,13 @@ Two DynamoDB tables, on-demand billing.
 
 ### Tool surface
 
-**Local tools (in-process, in `travel-agent/tools.py`):**
+**Local tools (Python functions bundled with the Travel Agent Lambda):**
 
 | Tool | Purpose |
 |---|---|
-| `add_watch(origin, destination, destinationAirport, dateWindow, nights, pax, maxTotalPrice, preferences)` | Create a watch from chat (LLM supplies both the destination city and the primary IATA) |
+| `add_watch(origin, destination, destinationAirport, earliestDepart, latestDepart, nights, pax, maxTotalPrice, preferences)` | Create a watch from chat. The agent supplies both the destination city and the primary IATA airport code. |
 | `list_watches()` | Return user's active watches with latest price snapshot |
-| `update_watch(watchId, **patches)` | Patch fields (e.g., "tighten to weekends only") |
+| `update_watch(watchId, patches)` | Patch mutable watch fields such as date window, budget, status, or preferences. |
 | `pause_watch(watchId)` / `resume_watch(watchId)` | Mute during an active trip |
 | `remove_watch(watchId)` | Soft-delete (`status="archived"`) |
 | `get_fare_history(watchId, limit=30)` | Price snapshots for trend display |
@@ -160,12 +166,16 @@ Two DynamoDB tables, on-demand billing.
 
 | Server | Tool | Purpose |
 |---|---|---|
-| `flights-mcp` | `search_offers(origin, destination, departDate, returnDate, pax, maxStops?)` | Live Duffel search; top N offers |
-| `flights-mcp` | `get_offer_details(offerId)` | Full fare rules + booking link |
-| `hotels-mcp` | `search_offers(city, checkin, checkout, pax, minStars?)` | Live LiteAPI search |
+| `flights-mcp` | `search_flight_offers(origin, destination, departDate, returnDate, pax, maxStops?)` | Duffel-backed flight search; fixture or live mode |
+| `flights-mcp` | `get_flight_offer_details(offerId)` | Full fare details + booking link |
+| `hotels-mcp` | `search_hotel_offers(city, checkin, checkout, pax, minStars?)` | LiteAPI-backed hotel search; fixture or live mode |
 | `hotels-mcp` | `get_hotel_details(hotelId)` | Amenities, photos, full rate breakdown |
 
-### Five chat patterns (these are also the v1 eval set)
+### Five intended chat patterns
+
+These are the product behaviors the agent prompt and evals are meant to keep
+healthy. They describe the target user experience, not a guarantee that every
+current edge case is fully solved.
 
 1. **Setup** — *"watch Tokyo trips for me"*
    Agent asks the missing pieces (origin, dates, nights, budget) one at a time, echoes the full watch back in plain English, asks to confirm, then calls `add_watch`. **No silent defaults.**
@@ -174,10 +184,10 @@ Two DynamoDB tables, on-demand billing.
    `list_watches` + recent `get_fare_history` per watch; reply leads with a one-line summary per watch ("Tokyo: $1480, near 30-day low, ↓$120 from last week"), then offers details on request.
 
 3. **Live search** — *"how much is Tokyo right now?"*
-   `search_offers` on both MCPs; reply with the headline number + qualitative read ("$1640 — about average for these dates"). Offers to convert to a watch.
+   `search_flight_offers` + `search_hotel_offers`; reply with the headline combined number plus a qualitative read ("$1640 — about average for these dates"). Offers to convert to a watch.
 
 4. **Refinement** — *"tighten Tokyo to weekends only"*
-   `update_watch`. Confirms the change.
+   Clarifies the exact date/preference change, echoes it back, waits for confirmation, then calls `update_watch`.
 
 5. **Acting on an alert** — *"show me the details from that email"*
    Looks up the most recent fare history row, surfaces `bestOfferBlob` + booking deep link.
@@ -193,150 +203,167 @@ The system prompt (in `agent_config.py`) must enforce:
 - Never invent prices, airlines, hotel names, or availability not present in tool responses.
 
 ### Model choice
-- **Chat agent:** Claude Sonnet 4.5 (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`). The original spec called for Sonnet 4.6; 4.5 is the latest Sonnet version this account has an AWS Marketplace subscription for. The chat-with-tool-calls pattern fits comfortably inside Sonnet's reasoning envelope. A prior commit briefly defaulted to Haiku 4.5 for cost reasons; that was reverted on discovery that the account did not have a Haiku 4.5 marketplace subscription — see `docs/launch-runbook.md` Phase 0 for the marketplace-gate callout.
-- **Alert decision (in poller):** Claude Haiku 4.5 (`claude-haiku-4-5-20251001`). The decision is small and bounded; Haiku is fast and cheap.
+- **Chat agent:** Claude Sonnet 4.5 (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`) is the CDK default injected through `AGENT_BEDROCK_MODEL_ID`. The chat-with-tool-calls pattern needs stronger reasoning than the original sample model. The literal fallback in `agent_config.py` remains the scaffold/test fallback; deployed stacks should use the CDK-provided value.
+- **Alert decision (in poller):** Claude Haiku 4.5 (`claude-haiku-4-5-20251001`). The decision is small and bounded; Haiku is fast and cheap. Fixture deploys can set `bedrockMode=stub` for deterministic poller decisions.
 
 ---
 
 ## 5. Polling & alert decision
 
 ### Cadence
-EventBridge schedule fires the Poller Lambda **every 4 hours**. Configurable via CDK env var.
+EventBridge schedule fires the Poller Lambda **every 4 hours** by default. The cadence is configurable through CDK context.
 
 ### Decision flow
 
-```mermaid
-flowchart TD
-    Start[EventBridge cron every 4h] --> ReadAll[Poller reads all<br/>active watches]
-    ReadAll --> Loop{For each watch}
-    Loop --> Search[Call flights-mcp + hotels-mcp<br/>get current best total]
-    Search --> Write[Write fare_history row]
-    Write --> Cheap{New total<br/>cheaper than<br/>last_alerted_price by ≥5%?}
-    Cheap -->|no| Skip[Skip — no alert]
-    Cheap -->|yes| Threshold{Below<br/>maxTotalPrice?}
-    Threshold -->|no| AnomalyCheck{30-day stats:<br/>≥15% below median?<br/>OR new 30d-low?}
-    Threshold -->|yes| AgentDecide[Bedrock Haiku call:<br/>'Is this worth alerting?']
-    AnomalyCheck -->|no| Skip
-    AnomalyCheck -->|yes| AgentDecide
-    AgentDecide -->|yes + reason| Notifier[Notifier Lambda]
-    AgentDecide -->|no| Skip
-    Notifier --> SES[SES email<br/>with reason from agent]
-    Notifier --> UpdateWatch[Update watch:<br/>last_alerted_at, last_alerted_price]
-```
+The maintained flowchart is [`../../diagrams/poller-notifier-flowchart.svg`](../../diagrams/poller-notifier-flowchart.svg).
+
+At runtime the poller:
+
+1. Reads active watches.
+2. Processes each watch sequentially.
+3. Calls `flights-mcp` and `hotels-mcp`.
+4. Builds the best combined snapshot.
+5. Skips the watch if there are no qualifying flight/hotel offers.
+6. Writes the snapshot to `FareHistory`.
+7. Runs the alert gates.
+8. Calls the Bedrock/stub decision layer only if the gates pass.
+9. Invokes the Notifier Lambda only when the decision returns `alert: true`.
+10. The notifier sends SES email, then writes `lastAlertedAt` and `lastAlertedPrice` back to the watch.
 
 ### What each gate does
-- **Cheaper-than-last-alerted gate (≥5% lower):** Anti-spam. Without this, a price that hovers just below threshold sends an email every 4 hours.
-- **Threshold gate:** The simple "below `maxTotalPrice`" path. Fast.
-- **Anomaly gate:** Catches the case where the user-stated threshold was too low and they'd otherwise miss a real opportunity. Triggers on ≥15% below 30-day median *or* a new 30-day low.
-- **Bedrock decision call:** Final yes/no. Sees the new total, the 30-day price history, the watch criteria, and stored preferences. Returns `{alert: bool, reason: string}`. The reason is templated into the email.
+- **Snapshot gate:** If no valid combined flight + hotel offer can be built, the poller logs `snapshot_skipped` and stops for that watch.
+- **Dedup gate:** If the watch has never alerted, it can continue. Otherwise the new total must be strictly lower than `lastAlertedPrice * 0.95`.
+- **Threshold gate:** The new total must be strictly below `maxTotalPrice` to pass this path.
+- **Anomaly gate:** If threshold does not pass, the poller can still continue when the new total is at least 15% below the 30-day median or is a new 30-day low.
+- **Decision layer:** Final yes/no. In live mode this is a Bedrock Haiku call; in fixture mode it can be deterministic stub logic. It sees the new total, 30-day price history, watch criteria, and stored preferences. It returns `{alert: bool, reason: string}`.
 
-### Why route through Bedrock at all
+### Why keep a model decision layer
 1. The `reason` line is the actual user value of the email. Generic "price dropped" notifications are why marketing emails get ignored. *Why* it's flagged is the trust-building part.
 2. Lets soft preferences influence the decision ("I prefer non-stops" can affect whether a 1-stop fare is alert-worthy at a low price).
 3. It's the agentic justification for using Bedrock at all in the background path — without this, the design is "scheduled DB query + SES."
 
 ### Cost bound
-For 10 active watches polled every 4 hours, Bedrock is called only when both the dedup gate and either threshold/anomaly gate pass — roughly 2-3 calls per day. Under $0.01/day on Haiku 4.5.
+For 10 active watches polled every 4 hours, Bedrock is called only when the dedup gate passes and either the threshold or anomaly gate passes. Fixture deploys can use `bedrockMode=stub`, which avoids the model call entirely.
 
 ### Idempotency
-The `lastAlertedAt` + `lastAlertedPrice` write happens **after** SES confirms send. If the Lambda crashes between SES success and DDB write, the next poll may produce one duplicate email; the dedup gate catches it on the third poll. Acceptable for v1.
+The `lastAlertedAt` + `lastAlertedPrice` write happens **after** SES confirms send. If SES succeeds but the DynamoDB writeback fails, the next poll may send a duplicate because the watch still has the old alert state. Once writeback succeeds, the dedup gate works normally.
 
 ### Failure handling
-- Per-watch errors (Duffel timeout, LiteAPI 5xx) are logged and skipped; the poller continues with the next watch. One bad watch never blocks the others.
+- Per-watch errors (MCP timeout, provider 5xx, malformed offer data) are logged and skipped; the poller continues with the next watch. One bad watch never blocks the others.
 - Poller-level errors (DDB unavailable, etc.) propagate as Lambda failure; EventBridge retries per its own policy.
-- Each poll writes a CloudWatch metric for: watches polled, watches errored, alerts sent, Bedrock decisions made.
+- The notifier always attempts real SES when `decision.alert` is true. If SES fails, it logs `ses_send_failed`, raises, and does not update alert state.
+- Poller metrics include watches polled, watches errored, alerts sent, and Bedrock decisions made. `alerts_sent` means the poller invoked the notifier; SES delivery success is logged by the notifier.
 
 ---
 
 ## 6. Evals
 
-Three layers, lightest to heaviest:
+The current eval package focuses on the poller's alert-decision quality. Chat-pattern evals are still a planned extension.
 
 | Layer | What it tests | How |
 |---|---|---|
-| **Unit** | MCP servers return correctly shaped data; local tools persist correctly | pytest, runs in CI |
-| **Behavioral (LLM-as-judge)** | Each of the 5 chat patterns from §4 behaves correctly | Fixture set per pattern; Claude Sonnet 4.6 as judge scores responses against rubric |
-| **Decision quality** | Alert worthiness call from §5 makes the right yes/no | Hand-labeled golden set of `(fare history, current price, watch criteria) → expected decision` |
+| **Unit** | MCP servers, local tools, poller gates, notifier, web OAuth, and eval runner plumbing | pytest/Jest, runs in CI |
+| **Decision quality** | The poller's alert-worthiness decision returns the expected yes/no | `evals/run_evals.py` over hand-labeled `evals/fixtures/decision/*.json` |
+| **Behavioral chat evals** | The 5 chat patterns from Section 4 | Planned; fixture folders are not implemented yet |
 
 ### Repo layout
 ```
 evals/
   fixtures/
-    chat_setup/       # 5-10 watch-creation conversations
-    chat_status/      # 5-10 status check exchanges
-    chat_search/      # 5-10 live searches
-    chat_refine/      # 5-10 watch updates
-    chat_alert/       # 5-10 "show me alert details" cases
-    decision/         # 30-50 hand-labeled alert worthiness cases
-  judge_prompts/      # Rubric per pattern
-  run_evals.py        # Local script — not deployed
-  results/            # Timestamped run outputs (gitignored)
+    decision/         # Hand-labeled alert-worthiness cases
+  judge_prompts/
+    decision.md       # Judge rubric for decision-quality evals
+  run_evals.py        # Local decision-eval runner; not deployed
+  results/            # Markdown reports from eval runs
+  tests/              # Unit tests for loader, runner, report, judge client
 ```
 
 ### Operational notes
-- Evals are a **local script**, not a deployed Lambda. They run on-demand before pushing major prompt changes.
-- Putting evals in CI is a v1.5 enhancement (requires Bedrock-on-CI cost discipline).
-- Judge model: Claude Sonnet 4.6. Decision-quality evals can use Haiku 4.5 for the under-test call but Sonnet 4.6 as judge.
+- The eval runner is a **local script**, not a deployed Lambda.
+- CI runs the eval package unit tests, not the full model-backed eval run.
+- Run the decision evals before changing `bedrock_decide.py`, changing gate thresholds in `gates.py`, regenerating decision fixtures, or bumping the model ID.
+- The under-test decision model is whatever `bedrock_decide.BEDROCK_MODEL_ID` resolves to; fixture/smoke runs can use `BEDROCK_MODE=stub`.
+- The judge defaults to Claude Sonnet 4.6, with `--stub` available for zero-network smoke tests.
+- Deferred chat eval fixture folders: `chat_setup/`, `chat_status/`, `chat_search/`, `chat_refine/`, and `chat_alert/`.
 
 ---
 
 ## 7. Cost estimate
 
-Personal usage (the only user is the builder):
+Personal usage estimate for a fixture or light live deployment. This is a
+budgetary estimate, not a guarantee; verify in AWS Pricing Calculator before
+running a heavier workload. It excludes external provider charges from Duffel
+and LiteAPI.
+
+Assumptions:
+- One active user.
+- Tens of chat requests per month, not thousands.
+- Poller runs every 4 hours.
+- Around 10 active watches.
+- Bedrock decision calls happen only after the poller gates pass.
 
 | Service | Cost/month |
 |---|---|
-| Bedrock Claude Haiku 4.5 (alert decisions) | ~$0.30 |
-| Bedrock Claude Sonnet 4.6 (chat agent, light use) | ~$0.50 |
-| Lambda (all functions) | free tier |
-| DynamoDB on-demand | <$0.10 |
-| EventBridge schedule | free |
-| SES | free (62K/mo from Lambda) |
-| API Gateway | <$0.10 |
-| S3 (Strands sessions) | <$0.05 |
-| Cognito | free (≤50K MAU) |
-| CloudWatch logs | <$0.20 |
-| **Total** | **~$1-3/month** |
+| Bedrock Claude Haiku 4.5 (poller alert decisions) | Usually pennies; depends on gated decision volume |
+| Bedrock Claude Sonnet 4.5 (chat agent) | Usually pennies to low dollars; depends on chat volume and output length |
+| Lambda (all functions) | Usually $0 within the Lambda free tier for personal usage |
+| DynamoDB on-demand (`Watches`, `FareHistory`) | Usually <$0.10 at personal usage |
+| EventBridge schedule | Usually $0 or pennies |
+| SES outbound email | $0.10 per 1,000 outbound emails plus data charges; effectively pennies for personal alerts |
+| API Gateway | Usually <$0.10 at personal usage; free tier depends on account age/status |
+| S3 (Strands sessions) | Usually <$0.05 |
+| Cognito | Usually $0 for one user; pricing depends on user pool tier and account eligibility |
+| CloudWatch logs/metrics/dashboard | Usually <$0.20 if logs stay small; can grow with verbose logs and Logs Insights use |
+| **Expected total** | **~$1-5/month for light personal usage** |
 
-**Mandatory:** AWS Budget alarm at $10/month with email notification. Cheap insurance against a runaway loop.
+Pricing references checked on 2026-05-27: [Bedrock pricing](https://aws.amazon.com/bedrock/pricing/), [Claude Haiku 4.5 pricing](https://www.anthropic.com/claude/haiku), [Claude pricing](https://docs.claude.com/en/docs/about-claude/pricing), [Lambda pricing](https://aws.amazon.com/lambda/pricing/), [DynamoDB pricing](https://aws.amazon.com/dynamodb/pricing/), [SES pricing](https://aws.amazon.com/ses/pricing/), [API Gateway pricing](https://aws.amazon.com/api-gateway/pricing/), [CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/), [Cognito pricing](https://aws.amazon.com/cognito/pricing/).
+
+**Mandatory:** Configure the AWS Budget alarm with a **$10/month threshold** and email notification. This is a guardrail, not the expected monthly spend.
 
 ---
 
-## 8. Out of scope for v1 (deferred)
+## 8. Still out of scope for v1
 
 | Item | Why deferred | When |
 |---|---|---|
-| Booking via Duffel | KYB onboarding, real money, refund flows | v2, after v1 has been used for a real trip planning cycle |
-| Opportunity finder mode (multi-destination per watch) | More complex ranking + UX | v1.5, once v1 is stable |
-| Calendar-aware trip suggester | Google Calendar OAuth | v2 — separate MCP server |
-| SMS / Discord / Telegram notifications | Email works, adds infra | Per-channel, on demand |
-| Multi-trip combinatorial planner | Complex search space | v2 |
-| Public demo mode (chat or static) | User is the only intended user | Maybe never |
-| Mobile app / native push | Email is fine on phone | Maybe never |
-| Multi-user marketing/onboarding | Architecturally supported but not productized | If/when this stops being a personal tool |
+| Booking via Duffel | Requires KYB onboarding, real-money handling, cancellation/refund flows, and customer-support policy | v2, after v1 has been used for real trip planning |
+| Opportunity finder mode (multi-destination per watch) | Requires broader ranking UX and more provider calls per poll | v1.5 or later |
+| Calendar-aware trip suggester | Requires Google Calendar OAuth and a separate trust boundary | v2; likely a separate MCP server |
+| SMS / Discord / Telegram notifications | Email is enough for v1; each channel adds auth, delivery, and failure modes | Per-channel, on demand |
+| Multi-trip combinatorial planner | Expands the search space beyond one watch -> one trip shape | v2 |
+| Public demo mode | Fixture mode supports demos; public access, rate limits, abuse handling, and onboarding are separate product work | Maybe never |
+| Mobile app / native push | Web + email works on phone for v1 | Maybe never |
+| Multi-user marketing/onboarding | Architecture supports users, but the product is still scoped as a personal tool | If/when this stops being a personal project |
 
 ---
 
-## 9. Launch checklist
+## 9. Launch checklist status
 
-These ship at the same time as v1 but are not features:
+These were the original launch artifacts. Current status:
 
-- README with: 30-second pitch, architecture diagram (export Mermaid as PNG), screenshots, Loom link, deployment instructions, cost note
-- 60-second Loom walkthrough — record one watch creation, one alert email, one "what's happening" status check
-- AWS Budget alarm at $10/month
-- CloudWatch dashboard with: poller success rate, last-poll timestamp per watch, Bedrock token usage, alert-send count
-- One real watch active for 7 days before declaring "done" — gives a real trend to screenshot for the README
+| Item | Status |
+|---|---|
+| README with pitch, architecture diagram, deployment instructions, and cost note | Done |
+| Architecture diagram source + PNG | Done; maintained under `docs/diagrams/` |
+| AWS Budget alarm at $10/month | Done in CDK via `lib/budget-alarm.js` |
+| CloudWatch dashboard | Done in CDK via `lib/observability-dashboard.js`; it tracks poller EMF counters, Lambda health, API errors, and SES send/bounce/complaint metrics |
+| Screenshots / demo evidence | Still useful; capture after a clean fixture or live run |
+| 60-90 second Loom walkthrough | Still useful if this repo is being presented externally |
+| One real watch active for several days | Optional evidence; useful for README screenshots, not required for the system design |
 
 ---
 
-## 10. Open questions for implementation planning
+## 10. Implementation questions now resolved
 
-These were deliberately deferred from brainstorming because they're better answered with code in front of you:
+These were open questions during brainstorming. The implementation has since answered them:
 
-- **CDK structure:** add new constructs to the existing stack, or split into a second stack for the new pieces? (Lean toward one stack with clear file separation.)
-- **Secret storage:** Duffel + LiteAPI keys in AWS Secrets Manager (consistent with patterns) or SSM Parameter Store (simpler for indie use)?
-- **Poller concurrency:** sequential per-watch loop (simple) vs `asyncio.gather` (faster as watches grow)? Start sequential.
-- **Bedrock cost cap:** add per-day token budget guard in the poller decision call?
-- **Failed-MCP-call retry:** retry with backoff inside the poller, or fail-fast and rely on next cron tick?
+| Question | Current decision |
+|---|---|
+| CDK structure | One stack with separated constructs. See `lib/trip-tracker-stack.js` and `lib/README.md`. |
+| Internal JWT signing secrets | Use Secrets Manager with separate agent and poller signing secrets. See ADR 0006. |
+| Duffel / LiteAPI keys | Passed as Lambda environment variables from CDK context for v1 personal scale. Fixture mode avoids live provider keys for tests and demos. |
+| Poller concurrency | Sequential per-watch loop. See ADR 0003. |
+| Bedrock cost cap | No separate per-day token budget in v1. Cost is bounded by fixture mode, dedup-first gating, reserved concurrency, clamped poll cadence, model-scoped IAM, and the $10 AWS Budget alarm. |
+| Failed MCP calls | Fail fast per watch and rely on the next scheduled poll. One bad watch does not block the rest of the loop. |
 
-These are good first items for the implementation plan.
+Remaining future hardening belongs in production-readiness follow-up work, not in this original design spec.

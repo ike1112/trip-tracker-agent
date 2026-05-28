@@ -264,7 +264,7 @@ is purely the narrative layer modeled on the AWS reference style.
 
 The structural/visual/codex review loop converged at v3. After that, the human reviewer ran several additional iterations driven by their own eyes and by comparison to other AWS reference architectures:
 
-- **v4** — added the right-side narrative column in AWS-reference-architecture style (after the human surfaced `docs/ai-agent-engineering-analysis.md` and the AWS sample `identify-product-defects-using-industrial-computer-vision-ra.pdf` as style references).
+- **v4** — added the right-side narrative column in AWS-reference-architecture style (after the human surfaced `docs/self-reflection/ai-agent-engineering-analysis.md` and the AWS sample `identify-product-defects-using-industrial-computer-vision-ra.pdf` as style references).
 - **v5** — fixed text wrap (added `whiteSpace=wrap` to narrative cells); enlarged step circles.
 - **v6** — anchored step circles to component top-left corners (overlapping the icon they describe).
 - **v7** — full restructure to match `docs/diagrams/upload-process-notify-pipeline-v9.drawio` style: 4 compute clusters in a top row + storage row + dedicated narrative column; 22 px navy numbered circles on edges; grouped pill badges in narrative.
