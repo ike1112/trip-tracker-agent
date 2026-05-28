@@ -20,6 +20,8 @@ def _web_env(monkeypatch):
     Tests that exercise the session-key validation path override
     SESSION_SECRET_KEY explicitly to assert fail-fast on missing/bad values.
     """
+    # Keep local developer deploy files (web/.env) from leaking into tests.
+    monkeypatch.setenv("PYTHON_DOTENV_DISABLED", "1")
     monkeypatch.setenv("COGNITO_SIGNIN_URL", "https://example.invalid/signin")
     monkeypatch.setenv("COGNITO_LOGOUT_URL", "https://example.invalid/logout?client_id=x&response_type=code")
     monkeypatch.setenv("COGNITO_WELL_KNOWN_URL", "https://example.invalid/.well-known/openid-configuration")

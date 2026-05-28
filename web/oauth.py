@@ -7,21 +7,45 @@
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
-from authlib.integrations.starlette_client import OAuth
 import os
+from urllib.parse import urlparse
+
+from authlib.integrations.starlette_client import OAuth
 
 # Configuration — all values come from environment variables so the same
 # image works in every environment.
+COGNITO_SIGNIN_URL = os.getenv("COGNITO_SIGNIN_URL")
 COGNITO_LOGOUT_URL = os.getenv("COGNITO_LOGOUT_URL")
 COGNITO_WELL_KNOWN_ENDPOINT_URL = os.getenv("COGNITO_WELL_KNOWN_URL")
 COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID")
 COGNITO_CLIENT_SECRET = os.getenv("COGNITO_CLIENT_SECRET")
+COGNITO_AUTHORIZE_URL = os.getenv("COGNITO_AUTHORIZE_URL")
+COGNITO_TOKEN_URL = os.getenv("COGNITO_TOKEN_URL")
 
 # OAuth callback and post-logout URLs come from env so the deployed image
 # can point at a real host instead of localhost. Tests stub these via
 # monkeypatch.setenv before importing this module.
 OAUTH_CALLBACK_URI = os.getenv("OAUTH_CALLBACK_URI", "http://localhost:8000/callback")
 OAUTH_POST_LOGOUT_URL = os.getenv("OAUTH_POST_LOGOUT_URL", "http://localhost:8000/chat")
+
+
+def _hosted_ui_origin(*urls: str | None) -> str | None:
+    """Return scheme://host from Cognito Hosted UI URL outputs."""
+    for url in urls:
+        if not url:
+            continue
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+    return None
+
+
+_cognito_hosted_ui_origin = _hosted_ui_origin(COGNITO_SIGNIN_URL, COGNITO_LOGOUT_URL)
+if _cognito_hosted_ui_origin:
+    COGNITO_AUTHORIZE_URL = (
+        COGNITO_AUTHORIZE_URL or f"{_cognito_hosted_ui_origin}/oauth2/authorize"
+    )
+    COGNITO_TOKEN_URL = COGNITO_TOKEN_URL or f"{_cognito_hosted_ui_origin}/oauth2/token"
 
 # OAuth client hoisted to module scope so tests can patch
 # `web.oauth.oauth.cognito.authorize_redirect` and `.authorize_access_token`.
@@ -34,6 +58,8 @@ oauth.register(
     client_secret=COGNITO_CLIENT_SECRET,
     client_kwargs={"scope": "openid email profile"},
     server_metadata_url=COGNITO_WELL_KNOWN_ENDPOINT_URL,
+    authorize_url=COGNITO_AUTHORIZE_URL,
+    access_token_url=COGNITO_TOKEN_URL,
     redirect_uri=OAUTH_CALLBACK_URI,
 )
 

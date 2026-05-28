@@ -39,6 +39,7 @@ echo "> Writing $DST_FILE_NAME"
     echo "COGNITO_CLIENT_ID=\"$(get_output ClientId)\""
     echo "COGNITO_CLIENT_SECRET=\"$(get_output ClientSecret)\""
     echo "AGENT_ENDPOINT_URL=\"$(get_output AgentEndpointUrl)\""
+    echo "SESSION_SECRET_KEY=\"$(python -c 'import secrets; print(secrets.token_urlsafe(48))')\""
 } > "$DST_FILE_NAME"
 
 cat "$DST_FILE_NAME"

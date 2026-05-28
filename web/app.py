@@ -7,6 +7,10 @@ import dotenv       # Loads environment variables from a .env file
 import uvicorn      # ASGI server used to run the FastAPI app
 import httpx        # Async-capable HTTP client for calling the agent endpoint
 
+# Load environment variables from .env before importing local modules that read
+# their config at import time.
+dotenv.load_dotenv()
+
 try:
     import oauth  # Local module that handles OAuth2 / Cognito login flows
 except ModuleNotFoundError:
@@ -17,8 +21,7 @@ try:
 except ModuleNotFoundError:
     gr = None
 
-# Load environment variables from .env (if present); values can be overridden by the shell environment
-dotenv.load_dotenv()
+GradioRequest = gr.Request if gr is not None else Any
 
 # The URL of the deployed Lambda-backed travel agent endpoint, injected at runtime
 AGENT_ENDPOINT_URL = os.getenv("AGENT_ENDPOINT_URL")
@@ -73,13 +76,16 @@ def check_auth(req: Request):
     return username
 
 
-def chat(message, history, request: Any):
+def chat(message, history, request: GradioRequest):
     """
     Gradio chat handler called every time the user sends a message.
     - Retrieves the authenticated username and bearer token from the session.
     - Forwards the user's message to the travel-agent Lambda endpoint.
     - Returns the agent's text reply, or a descriptive error string on failure.
     """
+    if request is None:
+        return "Your browser session was not available. Refresh the page and log in again."
+
     username = request.username
     # Retrieve the Cognito access token stored in the session during OAuth callback
     token = request.request.session["access_token"]
@@ -107,16 +113,17 @@ def chat(message, history, request: Any):
     return response_text
 
 
-def on_gradio_app_load(request: Any):
+def on_gradio_app_load(request: GradioRequest):
     """
     Called once when the Gradio page first loads for an authenticated user.
     Returns two values that are mapped to the logout button label and the
     initial chat message via gradio_app.load() below.
     """
-    return f"Logout ({request.username})", [gr.ChatMessage(
+    username = getattr(request, "username", None) or "user"
+    return f"Logout ({username})", [gr.ChatMessage(
         role="assistant",
         content=(
-            f"Hi {request.username}, I track trip prices for you. "
+            f"Hi {username}, I track trip prices for you. "
             "Describe a trip — origin, destination, dates, nights, budget — "
             "and I'll watch the combined flight + hotel cost and alert you "
             "when it's worth booking. What trip should I watch? "

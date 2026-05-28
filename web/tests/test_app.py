@@ -95,6 +95,17 @@ def test_F6_chat_forwards_session_access_token_as_bearer(app_module):
     assert kwargs["headers"]["Authorization"] == "Bearer session-token-abc"
 
 
+def test_F6b_chat_handles_missing_gradio_request(app_module):
+    result = app_module.chat("hi", history=[], request=None)
+    assert "session" in result.lower()
+
+
+def test_F6c_load_handles_missing_gradio_request(app_module):
+    label, messages = app_module.on_gradio_app_load(request=None)
+    assert label == "Logout (user)"
+    assert messages[0].role == "assistant"
+
+
 # ---------------------------------------------------------------------------
 # F7/F8 — session-key bug fix
 # ---------------------------------------------------------------------------
