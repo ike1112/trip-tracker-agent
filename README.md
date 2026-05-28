@@ -36,6 +36,10 @@ airline/OTA.
 
 ## Architecture
 
+![Trip Tracker architecture](./docs/diagrams/trip-tracker-architecture.png)
+
+Architecture source: [`trip-tracker-architecture.drawio`](./docs/diagrams/trip-tracker-architecture.drawio).
+
 ```
 You ──chat──> Web UI (Cognito-gated) ──JWT──> API Gateway
                                                  │
@@ -58,9 +62,13 @@ You ──chat──> Web UI (Cognito-gated) ──JWT──> API Gateway
 
 Complete architecture — every AWS service, all 8 Lambdas with their
 tools, both data flows, and the trust boundaries, as diffable ASCII:
-[`docs/architecture.md`](./docs/architecture.md). Icon version (draw.io):
-[`docs/architecture-v2.drawio`](./docs/architecture-v2.drawio) — every
-service, per-Lambda tool lists, both flows.
+[`docs/architecture.md`](./docs/architecture.md). Icon version:
+[`docs/diagrams/trip-tracker-architecture.drawio`](./docs/diagrams/trip-tracker-architecture.drawio)
+(rendered PNG: [`trip-tracker-architecture.png`](./docs/diagrams/trip-tracker-architecture.png)).
+
+**Poller and notifier flow**
+
+<img src="./docs/self-reflection/poller-notifier-flowchart.svg" alt="Poller and notifier flowchart" width="100%">
 
 For the full system guide — personas, user stories, user flows, and
 end-to-end sequence diagrams — see
@@ -98,13 +106,13 @@ component (constraints, alternatives rejected, tradeoffs) see
 
 ### Fixture vs live
 
-Every external integration can run in **fixture/stub mode** —
-recorded API responses, no Bedrock call, no SES send, no cost,
-deterministic tests. The MCP servers default to fixture mode; Bedrock
-and SES default to live for production deploys. Pass
-`-c bedrockMode=stub -c sesMode=stub` for a cost-free dry run (see
-Configure below). The entire test suite always runs in fixture/stub
-mode regardless of deploy configuration.
+Provider search can run in **fixture mode** and the poller decision can
+run in **Bedrock stub mode** for deterministic rehearsal. The notifier
+does not have an SES stub mode: when a notification is triggered, it
+attempts a real SES email send. The MCP servers default to fixture mode;
+Bedrock and SES default to live for production deploys. Pass
+`-c bedrockMode=stub` for a poller-decision dry run (see Configure
+below). The test suite mocks external sends/calls where needed.
 
 ## Running the project
 
@@ -136,19 +144,20 @@ values handy, then expand them onto the deploy command. A fixture/stub
 deploy needs **no** external API keys:
 
 ```bash
-# Cost-free dry run — MCP fixture responses, Bedrock stub, no SES send.
-# notifierSenderEmail/notifierRecipientEmail are validated at synth even
-# in stub mode, so they are required here too (no email is ever sent).
+# Fixture rehearsal - MCP fixture responses and poller Bedrock stub.
+# If a notification is triggered, the notifier attempts a real SES email send.
+# notifierSenderEmail/notifierRecipientEmail are required and must be SES-
+# verified as needed for your account sandbox state.
 # The agent's own Bedrock model is NOT stubbed — enable model access for
 # the agent model in your deploy region (see Prerequisites) or the first
 # chat returns AccessDeniedException.
-cdk deploy -c bedrockMode=stub -c sesMode=stub \
+cdk deploy -c bedrockMode=stub \
            -c notifierSenderEmail=you@example.com \
            -c notifierRecipientEmail=you@example.com
 
 # Full live deploy — real flight/hotel prices, real Bedrock call, real SES:
 cdk deploy -c mcpMode=live -c duffelApiKey=… -c liteApiKey=… \
-           -c bedrockMode=live -c sesMode=live \
+           -c bedrockMode=live \
            -c notifierSenderEmail=… -c notifierRecipientEmail=…
 ```
 

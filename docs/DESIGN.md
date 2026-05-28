@@ -3,7 +3,8 @@
 Why each component is built the way it is: the constraints, the
 alternatives rejected, the tradeoffs accepted. Companion to
 [`architecture.md`](./architecture.md) (the authoritative deployed
-architecture) and its icon view [`architecture-v2.drawio`](./architecture-v2.drawio),
+architecture) and its icon view
+[`diagrams/trip-tracker-architecture.drawio`](./diagrams/trip-tracker-architecture.drawio),
 [`SYSTEM.md`](./SYSTEM.md) (flows + sequence diagrams),
 [`adr/README.md`](./adr/README.md) (the binding decisions), and
 [`threat-model.md`](./threat-model.md). Where a decision is
