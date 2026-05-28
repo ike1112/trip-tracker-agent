@@ -1,23 +1,21 @@
-# Launch Runbook: Fixture Rehearsal and Live Evidence Run
+# Live Launch — 7-Day Evidence Run
 
-This runbook has two separate tracks:
+The live-launch protocol: real Duffel, LiteAPI, Bedrock poller decisions,
+SES email, and a 7-day price-watch evidence run.
 
-- **Track A: Fixture/Stub Rehearsal** deploys the stack with fixture travel
-  providers, stubbed poller Bedrock decisions, and real SES sends. Use it to
-  verify infrastructure, Cognito, the web UI, and fixture-mode behavior before
-  spending time on live evidence.
-- **Track B: Live Launch** deploys with real Duffel, LiteAPI, Bedrock poller
-  decisions, SES email, and the 7-day price-watch evidence run.
+**Before running this**, complete the cost-free fixture-mode dry run in
+[`dry-run.md`](./dry-run.md). It exercises Cognito, the web UI, the agent,
+and the fixture path — catching the deploy-time bugs (`prep-web.sh`,
+authorizer deps, MCP transport, Bedrock model access) before you spend on
+live keys. This file assumes the dry run has passed.
 
 All command blocks are written for Windows `cmd.exe`. Replace every
 `PUT_..._HERE` value before running a command.
 
 ## What The Stack Deploys
 
-Both tracks deploy the same CDK stack, `TripTrackerStack`, defined by
-`bin/trip-tracker.js` and `lib/trip-tracker-stack.js`.
-
-The stack creates:
+The CDK stack `TripTrackerStack` (defined by `bin/trip-tracker.js` and
+`lib/trip-tracker-stack.js`) creates:
 
 - Cognito demo users and hosted-login configuration for the web UI.
 - API Gateway endpoints for the chat agent and MCP servers.
@@ -34,9 +32,7 @@ The stack creates:
 Use it only after you have reviewed the command, AWS account, region, and
 context values.
 
-## Shared Phase 0: Local Setup
-
-Run this once before either track.
+## Phase 0: Local Setup
 
 - [ ] Open `cmd.exe` in the repo root, the directory containing `package.json`
   and `cdk.json`.
@@ -114,7 +110,7 @@ Run this once before either track.
 
   CDK does not read `.env`; it is a gitignored scratch pad for deploy values.
 
-## Shared Phase 1: Pre-Deploy Tests
+## Phase 1: Pre-Deploy Tests
 
 All commands run from the repo root.
 
@@ -151,142 +147,12 @@ All commands run from the repo root.
 
 Stop here if any gate fails.
 
-## Track A: Fixture/Stub Rehearsal
+## Live launch
 
-Use this track for a deploy rehearsal. It validates CDK, Cognito, the web app,
-fixture MCP responses, the poller decision stub, real SES email sends from the
-notifier, the dashboard, and the budget construct.
+The evidence-producing path: real travel providers, real poller Bedrock
+decision, real SES email, and a 7-day `FareHistory` trend.
 
-Important caveat: the chat agent still uses Bedrock live by default, even in
-fixture/stub deploys. Enable access for the agent model in Bedrock unless you
-also change the agent implementation.
-
-### Fixture Phase A0: Access Requirements
-
-- [ ] Bedrock access is enabled for the chat agent model:
-  `us.anthropic.claude-sonnet-4-5-20250929-v1:0`.
-- [ ] AWS Marketplace access for Anthropic models is cleared through the
-  Bedrock console **Manage model access** flow.
-- [ ] `notifierSenderEmail`, `notifierRecipientEmail`, and `budgetAlarmEmail`
-  are valid addresses. `notifierSenderEmail` must be verified in SES; if your
-  SES account is still in sandbox, `notifierRecipientEmail` must be verified too.
-
-### Fixture Phase A1: Deploy Fixture Stack
-
-Run from the repo root:
-
-```bat
-cdk deploy ^
-  --require-approval never ^
-  -c mcpMode=fixture ^
-  -c bedrockMode=stub ^
-  -c notifierSenderEmail=isabelkeyan@gmail.com ^
-  -c notifierRecipientEmail=isabelkeyan@gmail.com ^
-  -c budgetAlarmEmail=isabelkeyan@gmail.com
-```
-
-### Fixture Phase A2: Save Outputs
-
-```bat
-aws cloudformation describe-stacks ^
-  --stack-name TripTrackerStack ^
-  --query "Stacks[0].Outputs" ^
-  --output table
-```
-
-```bat
-for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'PollerFunctionName')]|[0].OutputValue" --output text`) do set POLLER_FN_NAME=%A
-for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'FareHistoryTableName')]|[0].OutputValue" --output text`) do set FARE_HISTORY_TABLE_NAME=%A
-for /f "usebackq delims=" %A in (`aws cloudformation describe-stacks --stack-name TripTrackerStack --query "Stacks[0].Outputs[?contains(OutputKey, 'WatchesTableName')]|[0].OutputValue" --output text`) do set WATCHES_TABLE_NAME=%A
-echo %POLLER_FN_NAME%
-echo %FARE_HISTORY_TABLE_NAME%
-echo %WATCHES_TABLE_NAME%
-```
-
-### Fixture Phase A3: Web Smoke Test
-
-- [ ] Prepare the web app. `prep-web.sh` is a POSIX shell script; from
-  `cmd.exe`, run it through `bash` if Git Bash or WSL provides `bash` on your
-  PATH. It writes `web\.env`, including a generated `SESSION_SECRET_KEY` for
-  the web session cookie:
-
-  ```bat
-  bash ./prep-web.sh
-  ```
-
-- [ ] Start the web UI in a separate `cmd.exe` terminal:
-
-  ```bat
-  cd web
-  python -m venv .venv
-  .venv\Scripts\activate.bat
-  python -m pip install --upgrade pip
-  python -m pip install -r requirements.txt
-  python app.py
-  ```
-
-- [ ] Open `http://localhost:8000/chat/` and log in as `Alice`.
-- [ ] Run this exact fixture chat script.
-
-  Input 1:
-
-  ```text
-  Hi
-  ```
-
-  Expected output: the agent greets `Alice` and describes the trip-price
-  tracking workflow.
-
-  Input 2:
-
-  ```text
-  Watch Tokyo from SFO to NRT, departure window October 15 to October 15, 2026, 5 nights, 1 passenger, max total price $1500.
-  ```
-
-  Expected output: the agent echoes the full Tokyo watch in plain English and
-  asks for confirmation before saving.
-
-  Input 3:
-
-  ```text
-  Yes, confirmed. Create this watch.
-  ```
-
-  Expected output: the agent confirms the watch was created. Verify one new
-  active Tokyo row exists in DynamoDB.
-
-  Input 4:
-
-  ```text
-  What's happening with my watches?
-  ```
-
-  Expected output: one readable headline for the active Tokyo watch.
-
-  Input 5:
-
-  ```text
-  How much is Tokyo right now for SFO to NRT on October 15, 2026 for 5 nights?
-  ```
-
-  Expected output: a fixture-backed flight + hotel price for Tokyo.
-
-### Fixture Phase A4: Optional Fixture Cleanup
-
-Destroy the fixture stack if you are done rehearsing and do not want it to
-remain in the account.
-
-```bat
-cdk destroy
-```
-
-## Track B: Live Launch
-
-Use this track only after the shared tests pass and fixture rehearsal is good.
-This is the evidence-producing path: real travel providers, real poller
-Bedrock decision, real SES email, and a 7-day `FareHistory` trend.
-
-### Live Phase B0: Live Access Requirements
+### Phase B0: Live Access Requirements
 
 - [ ] Bedrock model access is enabled in the deploy region.
 
@@ -315,7 +181,7 @@ Bedrock decision, real SES email, and a 7-day `FareHistory` trend.
   - `notifierRecipientEmail`
   - `budgetAlarmEmail` if different from the alert recipient
 
-### Live Phase B1: Deploy Live Stack
+### Phase B1: Deploy Live Stack
 
 Run from the repo root:
 
@@ -331,7 +197,7 @@ cdk deploy ^
   -c budgetAlarmEmail=PUT_BUDGET_ALARM_EMAIL_HERE
 ```
 
-### Live Phase B2: Save Outputs And Confirm Budget
+### Phase B2: Save Outputs And Confirm Budget
 
 ```bat
 aws cloudformation describe-stacks ^
@@ -358,7 +224,7 @@ aws budgets describe-budget ^
 Confirm the budget notification email is received by `budgetAlarmEmail` or
 `notifierRecipientEmail` before starting any live polling.
 
-### Live Phase B3: Live Smoke Test
+### Phase B3: Live Smoke Test
 
 The 7-day clock does not start until every item in this phase is complete.
 
@@ -506,7 +372,7 @@ The 7-day clock does not start until every item in this phase is complete.
   Required: at least one row with numeric `flightPrice`, `hotelPrice`, and
   `totalPrice`.
 
-### Live Phase B4: Run The 7-Day Trend Watch
+### Phase B4: Run The 7-Day Trend Watch
 
 Use two separate watches.
 
@@ -554,7 +420,7 @@ Likely causes:
 
 Never use Watch ALERT rows for the 7-day trend curve.
 
-### Live Phase B5: Documentation During The Wait
+### Phase B5: Documentation During The Wait
 
 Documentation changes are safe while the 7-day clock runs.
 
@@ -572,7 +438,7 @@ Documentation changes are safe while the 7-day clock runs.
   decision-quality evidence.
 - [ ] Draft `docs/demo-script.md` for a 60-90 second recording.
 
-### Live Phase B6: Export Evidence Before Teardown
+### Phase B6: Export Evidence Before Teardown
 
 Run from the repo root after the 7-day window completes.
 
@@ -632,7 +498,7 @@ Run from the repo root after the 7-day window completes.
   git log -1 --stat -- docs/evidence/
   ```
 
-### Live Phase B7: Demo And Teardown
+### Phase B7: Demo And Teardown
 
 - [ ] Record the demo from `docs/demo-script.md`.
 - [ ] Add README links to:
