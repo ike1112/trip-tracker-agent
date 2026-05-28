@@ -1,15 +1,27 @@
 # Trip Tracker — Production-Readiness Companion Spec
 
-**Date:** 2026-05-10
-**Status:** Draft (awaiting review)
-**Owner:** Isabel
-**Companion to:** [`2026-05-08-trip-tracker-agent-design.md`](./2026-05-08-trip-tracker-agent-design.md)
+| Field | Value |
+|---|---|
+| Date | 2026-05-10 |
+| Status | Historical planning companion; partially superseded by implementation |
+| Owner | Isabel |
+| Companion to | [`2026-05-08-trip-tracker-agent-design.md`](./2026-05-08-trip-tracker-agent-design.md) |
+
+> **Current status note.** This document is a dated production-readiness plan
+> from May 10, 2026. It is useful for understanding the implementation intent
+> and how the hardening work was planned, but it is not the current source of
+> truth for every detail. For current behavior, prefer the top-level
+> [`README.md`](../../../README.md), [`docs/architecture.md`](../../architecture.md),
+> [`docs/DESIGN.md`](../../DESIGN.md), ADRs under [`docs/adr/`](../../adr/),
+> and [`docs/launch-runbook.md`](../../launch-runbook.md).
 
 ---
 
 ## 1. Scope and relationship to the design spec
 
-The 2026-05-08 design spec answers *what* we are building and *why*. It stays untouched.
+The 2026-05-08 design spec answers *what* we are building and *why*. That
+design spec has since been updated in a few places to reflect implementation
+reality; this companion remains the historical production-readiness plan.
 
 This companion spec answers a different question:
 **"How does this codebase signal production-grade engineering judgement to a reviewer who forks the repo and reads it without me in the room?"**
@@ -22,7 +34,7 @@ It covers cross-cutting architecture decisions added on top of the design (fixtu
 - Not a multi-tenant productization plan.
 
 **Decisions inherited from the design spec but worth restating here:**
-- Lambda env vars chosen for Duffel/LiteAPI keys (resolves design-spec §10 Q2 with a third option not originally listed; appropriate for personal scale, captured in ADR 0006).
+- Duffel/LiteAPI keys remain Lambda env vars for v1 personal scale; internal agent/poller JWT signing secrets use Secrets Manager per ADR 0006.
 - Sequential per-watch poll loop in v1 (design-spec §10 Q3; ADR 0003).
 - Fail-fast on MCP errors, no retry inside poller (design-spec §10 Q5).
 - No Bedrock cost cap in v1; AWS Budget alarm covers (design-spec §10 Q4).
@@ -40,11 +52,11 @@ Approach A′ — production-readiness baked into each feature slice; one final 
 | 2 | Watch CRUD tools | 7 `@tool` functions in `tools.py` + `watches.py` helpers + system-prompt update | Closure-factory pattern for user-scoped tools (ADR 0001); unit tests for `watches.py`; structured JSON logs via `aws-lambda-powertools`; ownership check on every `watchId`-keyed tool |
 | 3 | `flights-mcp` Lambda | New Lambda dir, Duffel client, `search_offers` + `get_offer_details`, MCP server, API GW, custom JWT authorizer | Fixture replay mode (ADR 0002); Duffel-client unit tests using fixtures only; threat-model section for the Duffel boundary; X-Ray tracing on Lambda |
 | 4 | `hotels-mcp` Lambda | Same shape as #3 but LiteAPI | Fixture replay mode; LiteAPI threat-model section; X-Ray |
-| 5 | Poller Lambda | Reads active watches, calls both MCPs, writes FareHistory, gate logic (design-spec §5); Bedrock decision stubbed `{alert: True, reason: "stub"}` | Sequential loop (ADR 0003); per-watch structured logs with `watch_id`/`user_id` fields; X-Ray; CloudWatch metric emission (`watches_polled`, `watches_errored`, `alerts_sent`, `bedrock_decisions_made`) |
+| 5 | Poller Lambda | Reads active watches, calls both MCPs, writes FareHistory, gate logic (design-spec §5); supports both stub and live Bedrock decision modes | Sequential loop (ADR 0003); per-watch structured logs with `watch_id`/`user_id` fields; X-Ray; CloudWatch metric emission (`watches_polled`, `watches_errored`, `alerts_sent`, `bedrock_decisions_made`) |
 | 6 | Bedrock decision | Real Haiku 4.5 call returning `{alert, reason}` | Eval golden set v1 (decision-quality fixtures + judge rubric); eval runner script `evals/run_evals.py`; sample report committed; ADR 0004 (why route through Bedrock for the decision at all) |
-| 7 | Notifier + SES | Templated email with reason; `lastAlertedAt`/`lastAlertedPrice` writeback after SES success | After-SES idempotency (ADR 0005); markdown-safe email template; CloudWatch alarm on Notifier errors |
-| 8 | Cleanup | Delete the legacy stub MCP scaffold and its CDK construct | Migration commit comment; CloudWatch dashboard JSON in `infra/dashboards/` for the 4 metrics from slice 5 |
-| 9 | Polish (new) | (no feature code) | CI workflow `.github/workflows/ci.yml` (lint, `cdk synth`, `cfn-lint`, unit tests in fixture mode); `.env.example`; README rewritten per §4.6; ADR index `docs/adr/README.md`; threat model `docs/threat-model.md`; AWS Budget alarm (CDK); architecture PNG export; Loom outline `docs/demo-script.md`; LICENSE; GitHub repo description + topics |
+| 7 | Notifier + SES | Templated email with reason; `lastAlertedAt`/`lastAlertedPrice` writeback after SES success | After-SES idempotency (ADR 0005); markdown-safe email template; SES stub mode was later removed so triggered notifications always attempt real SES |
+| 8 | Cleanup | Delete the legacy stub MCP scaffold and its CDK construct | Migration commit comment; CloudWatch dashboard implemented in CDK via `lib/observability-dashboard.js` |
+| 9 | Polish (new) | (no feature code) | CI workflow `.github/workflows/ci.yml`; README; ADR index `docs/adr/README.md`; threat model `docs/threat-model.md`; AWS Budget alarm (CDK); architecture diagram under `docs/diagrams/`; demo evidence remains optional/presentation work |
 
 ---
 
@@ -67,7 +79,7 @@ lambdas/flights-mcp/
     LHR-CDG-2026-12-20.json
 ```
 
-Both clients implement the same interface; the rest of the Lambda is mode-agnostic. Fixtures are recorded once via `tools/record-fixtures.py` (one-shot, run with real keys) and committed.
+Both clients implement the same interface; the rest of the Lambda is mode-agnostic. Fixtures are committed under each MCP server's `fixtures/` directory. The original plan called for a `tools/record-fixtures.py` helper, but the current repo does not treat that helper as a maintained artifact.
 
 **Why this is the strongest single production-readiness signal:**
 - Repo is forkable and end-to-end runnable for a reviewer with no Duffel/LiteAPI accounts.
@@ -85,7 +97,7 @@ from aws_lambda_powertools import Logger
 logger = Logger(service="travel-agent")
 ```
 
-Every log line is JSON: `timestamp`, `level`, `message`, `service`, `request_id`, `correlation_id`, plus event-specific fields (`watch_id`, `user_id` redacted to first-8 chars). Makes CloudWatch Logs Insights queries trivial — the README will include 2-3 sample queries.
+Every log line is JSON: `timestamp`, `level`, `message`, `service`, request/trace context where available, plus event-specific fields such as `watch_id` and redacted user identifiers. This makes CloudWatch Logs Insights queries practical. The original plan expected README queries; current launch/debug guidance mainly lives in the runbooks and self-reflection notes.
 
 JS Lambdas (the two authorizers) use `pino` for the same shape.
 
@@ -120,69 +132,75 @@ Format: 1 page each, "Context / Decision / Consequences" (Michael Nygard style).
 | 0003 | Sequential per-watch poll loop | 5 |
 | 0004 | Bedrock decision call as alert-worthiness gate | 6 |
 | 0005 | After-SES idempotency for `lastAlertedAt` writeback | 7 |
-| 0006 | Lambda env vars (not Secrets Manager) for external API keys | written slice 9 |
-| 0007 | Watches table without status GSI | written slice 9 (decision was made in slice 1; ADR backfilled) |
+| 0006 | Per-component JWT signing secrets via Secrets Manager | written slice 9 |
+| 0007 | Watches table status GSI for `Query` instead of `Scan` | written slice 9 |
 
 ### 4.2 Threat model — `docs/threat-model.md`
 
 Single page covering:
 - Trust boundaries: web ↔ API GW; agent ↔ MCP servers; MCP servers ↔ Duffel/LiteAPI.
 - JWT chain: Cognito (RS256) → agent verifies → agent signs internal HS256 → MCP authorizer verifies.
-- Secrets handling: Lambda env var for v1, why not Secrets Manager (cost vs. personal scale; production would change), what changes for production.
+- Secrets handling: external provider keys remain Lambda env vars for v1 personal scale; internal JWT signing secrets use Secrets Manager with separate agent and poller secrets.
 - Failure modes that are security-relevant: LLM passing a wrong `userId` (mitigated by §3.4), expired/forged JWT, leaked Duffel key (provider-side rate limits + revocation), prompt-injection from MCP tool responses (mitigated by no tool result going back into a system prompt).
 - Out-of-scope explicit list: DDoS, infra compromise, AWS account takeover.
 
 ### 4.3 Evals as repo artifacts — `evals/`
 
-Per design-spec §6, three layers. Repo-visible additions:
-- `evals/results/2026-05-XX-baseline.md` — sample run committed; markdown table per chat pattern with judge rationale snippets, plus pass/fail per decision-quality case.
-- `evals/run_evals.py` — locally runnable: `make evals`. Reads judge rubrics from `evals/judge_prompts/`.
-- CI integration: `workflow_dispatch`-only trigger (manual run). Uses GitHub Actions OIDC for AWS auth. Output posted as PR comment via `gh pr comment`. **Not** on every PR — cost discipline.
+Current repo-visible eval artifacts:
+- `evals/fixtures/decision/` — hand-labeled alert-decision cases.
+- `evals/judge_prompts/decision.md` — rubric for the decision-quality judge.
+- `evals/run_evals.py` — local decision-eval runner.
+- `evals/results/2026-05-13-baseline.md` — committed sample report.
+- `.github/workflows/ci.yml` runs eval package unit tests, not the full model-backed eval corpus.
+
+The chat-pattern eval folders from the original design are deferred.
 
 ### 4.4 CI workflow — `.github/workflows/ci.yml`
 
 Jobs (every push and PR):
-- `lint` — `eslint` for JS; `ruff` for Python.
-- `synth` — `npx cdk synth --quiet`. Catches CDK regressions.
-- `cfn-lint` — `cfn-lint cdk.out/*.template.json`.
-- `unit-tests` — `pytest` for Python Lambdas; `vitest`/`jest` for JS Lambdas. Runs in fixture mode (no AWS, no Duffel/LiteAPI; `MCP_MODE=fixture`).
+- Node tests for CDK constructs and JS Lambda packages.
+- Python tests for poller, notifier, travel-agent, web, and eval package unit tests.
 
-Manual-only:
-- `evals` (`workflow_dispatch`) — runs the eval suite; comments results on a triggered PR.
+The original plan listed lint, `cdk synth`, `cfn-lint`, and manual model-backed eval workflow steps. Those are not wired in the current CI workflow.
 
-### 4.5 `.env.example`
+### 4.5 Environment examples
 
 ```
-# Required for live mode. Leave empty + set MCP_MODE=fixture to run without keys.
+# Historical planned shape. Current launch values are documented in
+# docs/launch-runbook.md and web/prep-web.sh output.
+
+# Required for live MCP mode. Leave empty + set mcpMode=fixture to run without keys.
 DUFFEL_API_KEY=
 LITEAPI_API_KEY=
 
-# SES verified email for trip alerts. Required from slice 7 onwards.
-ALERT_TO_EMAIL=
+# SES verified sender/recipient emails are supplied through CDK context.
+NOTIFIER_SENDER_EMAIL=
+NOTIFIER_RECIPIENT_EMAIL=
 
-# Internal HS256 secret used for agent → MCP-server JWTs.
-# Any random 32+ char string; rotate independently of API keys.
-JWT_SIGNATURE_SECRET=
+# Internal MCP JWT signing secrets are generated in Secrets Manager by CDK,
+# not supplied through this file.
 
-# 'live' (default) or 'fixture'. Set to 'fixture' to run end-to-end without external API keys.
-MCP_MODE=live
+# MCP mode is controlled at deploy time through CDK context.
+MCP_MODE=fixture
 ```
 
-### 4.6 README structure (slice 9)
+### 4.6 README structure
+
+This was the planned README structure. The current top-level README covers the pitch, architecture diagram, repository map, fixture/live deployment paths, and cost/guardrails. Demo media remains optional.
 
 1. **30-second pitch** — one paragraph: what it does, why it's interesting, who built it.
-2. **Architecture diagram** — Mermaid PNG (export of design-spec §2 diagram).
-3. **Demo** — embedded 90-second Loom (chat-create a watch → live search → simulated alert email).
+2. **Architecture diagram** — maintained as Draw.io source + PNG under `docs/diagrams/`.
+3. **Demo evidence** — optional Loom/screenshots from a fixture or live run.
 4. **Why this exists** — design-spec §1 distilled.
 5. **Getting started** — 3 commands; fixture mode is the default so reviewer doesn't need keys.
 6. **Production-readiness signals** — link to this companion spec; bullet summary of fixture mode, structured logs, X-Ray, evals, threat model, CI.
-7. **What would change for actual production** — explicit hardening list: `RemovalPolicy.RETAIN`, secrets store, multi-tenancy guardrails, rate limiting on MCP endpoints, eval gate on PRs, blue-green deploy, status GSI on Watches, Bedrock cost cap.
-8. **Cost** — $1-3/mo personal use (design-spec §7); link to AWS Budget alarm CDK construct.
+7. **What would change for actual production** — explicit hardening list: `RemovalPolicy.RETAIN`, multi-tenancy guardrails, rate limiting on MCP endpoints, model-backed eval gate on PRs, blue-green deploy, Bedrock cost cap, notifier DLQ/alarm.
+8. **Cost** — see the current estimate in design-spec §7; link to AWS Budget alarm CDK construct.
 9. **Links** — design spec, this spec, threat model, ADR index, evals report.
 
 ### 4.7 Demo script — `docs/demo-script.md`
 
-Loom outline for slice 9:
+Optional Loom outline for presentation:
 - 0:00-0:15 — show the chat creating a watch (real flow, real DDB write).
 - 0:15-0:35 — show "what's happening with my watches?" (`list_watches`).
 - 0:35-1:00 — show live flight search via fixture mode; call out the `MCP_MODE` env var.
@@ -205,7 +223,8 @@ slice-9-scoped items below are already complete on `main`.
 - [x] (slice 6) Bedrock decision + eval baseline report committed (`evals/results/`) + ADR 0004
 - [x] (slice 7) Notifier + SES + ADR 0005 + markdown-safe email template
 - [x] (slice 8) legacy stub MCP scaffold removed + CloudWatch dashboard committed
-- [ ] (slice 9, remaining) CI green + Loom recorded
+- [x] (slice 9) CI workflow, ADR index, threat model, budget alarm, README/architecture docs
+- [ ] (presentation evidence) Loom/screenshots from a clean fixture or live run
 - [ ] (post-launch, design-spec §9) One real watch active for 7 days before declaring done
 
 ---
