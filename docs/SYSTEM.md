@@ -71,8 +71,9 @@ health. Not a 24/7 on-call; the system must fail safe and self-heal.
 
 **Operator**
 
-- So I can try it free, I want fixture/stub modes that need no API keys
-  and make no paid calls.
+- So I can try the travel-provider path cheaply, I want fixture/stub modes
+  that need no Duffel/LiteAPI keys. The notifier always attempts real SES
+  when an alert is triggered.
 - So a runaway loop can't bankrupt me, I want a $10/mo budget alarm.
 - So a single leaked credential is contained, I want the agent and the
   poller to sign with **separate** secrets ([ADR 0006](./adr/0006-per-component-jwt-secrets.md)).
@@ -238,9 +239,9 @@ MCP servers.
 
 ## 8. Modes and cost posture
 
-`mcpMode` defaults to **fixture** (recorded API responses, no keys).
-`bedrockMode` and `sesMode` default to **live** for production deploys —
-pass `-c bedrockMode=stub -c sesMode=stub` for a fully cost-free dry run
-(see [`../README.md`](../README.md) → Configure). The whole test suite
-always runs fixture/stub. The $10/mo AWS Budget alarm is the backstop
-against a runaway poll loop.
+`mcpMode` defaults to **fixture** (recorded API responses, no provider keys).
+`bedrockMode` defaults to **live** for production deploys and can be set to
+`stub` for deterministic poller-decision rehearsal. The notifier has no
+deploy-time SES stub mode: when an alert is triggered, it attempts a real SES
+email send. The test suite mocks external sends/calls where needed. The
+$10/mo AWS Budget alarm is the backstop against a runaway poll loop.

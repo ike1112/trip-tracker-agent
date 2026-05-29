@@ -16,10 +16,11 @@ connects.
 
 These shape every component; read them once.
 
-- **Cost-safe by default.** `mcpMode` defaults to fixture; the test
-  suite always runs fixture/stub; Bedrock and SES have stub modes; a
-  $10/mo AWS Budget alarm is the hard backstop. You can deploy and
-  exercise the whole system for $0. ([ADR 0002](./adr/0002-fixture-replay-mode.md), [ADR 0004](./adr/0004-bedrock-decision.md))
+- **Cost-aware by default.** `mcpMode` defaults to fixture; the test
+  suite runs with mocked or fixture external dependencies; the poller
+  decision has a Bedrock stub mode; and a $10/mo AWS Budget alarm is the
+  hard backstop. The notifier has no deploy-time SES stub mode: triggered
+  notifications always attempt a real email. ([ADR 0002](./adr/0002-fixture-replay-mode.md), [ADR 0004](./adr/0004-bedrock-decision.md))
 - **Identity is never inferred from the model.** The user is a verified
   JWT claim end to end. The LLM tool schema never carries `user_id`, so
   prompt injection cannot retarget another user. ([ADR 0001](./adr/0001-user-scoped-tools-via-closure-factory.md))
@@ -110,11 +111,11 @@ operations and answers live-price / status questions.
 - **S3 session store.** Strands `S3SessionManager` externalizes
   multi-turn state so the Lambda stays stateless; the bucket is
   `grantReadWrite`-scoped to the agent only.
-- **Model choice is explicit and overridable.** Currently Claude 3.5
-  Haiku (scaffold default) via `AGENT_BEDROCK_MODEL_ID`; the design spec
-  calls for a stronger chat model and that upgrade is tracked
-  separately. Note this is a *different* model from the poller's
-  decision model (§8) — they are chosen independently.
+- **Model choice is explicit and overridable.** The deployed chat-agent
+  default is Claude Sonnet 4.5 via `AGENT_BEDROCK_MODEL_ID`, injected by
+  CDK from `agentBedrockModelId` or the construct default. Note this is a
+  *different* model from the poller's decision model (§8) — they are chosen
+  independently.
 - **System prompt enforces discipline:** ask for missing fields one at a
   time, echo the full structured watch in plain English before any
   write, headline summaries on status, never invent a price not returned

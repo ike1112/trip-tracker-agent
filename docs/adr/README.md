@@ -14,4 +14,3 @@ Format follows Michael Nygard's "Context / Decision / Consequences."
 | [0007](./0007-watches-status-gsi.md) | Watches table status GSI for `Query` (not `Scan`) | Accepted |
 
 Trip-tracker design context: [`../superpowers/specs/2026-05-08-trip-tracker-agent-design.md`](../superpowers/specs/2026-05-08-trip-tracker-agent-design.md).
-Production-readiness companion spec: [`../superpowers/specs/2026-05-10-trip-tracker-production-readiness.md`](../superpowers/specs/2026-05-10-trip-tracker-production-readiness.md).

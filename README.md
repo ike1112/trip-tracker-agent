@@ -14,9 +14,8 @@ specific candidate trip over time. This does. It is a single-user
 personal project; the architecture is multi-tenant only because the
 underlying scaffold is.
 
-Canonical design: [`docs/superpowers/specs/2026-05-08-trip-tracker-agent-design.md`](./docs/superpowers/specs/2026-05-08-trip-tracker-agent-design.md).
-Decisions: [`docs/adr/README.md`](./docs/adr/README.md). Threat model:
-[`docs/threat-model.md`](./docs/threat-model.md).
+Start with the architecture below, then use the [Documentation](#documentation)
+section to jump into design rationale, runbooks, ADRs, and threat modeling.
 
 ## What the agent does
 
@@ -38,45 +37,11 @@ airline/OTA.
 
 ![Trip Tracker architecture](./docs/diagrams/trip-tracker-architecture.png)
 
-Architecture source: [`trip-tracker-architecture.drawio`](./docs/diagrams/trip-tracker-architecture.drawio).
-
-```
-You ──chat──> Web UI (Cognito-gated) ──JWT──> API Gateway
-                                                 │
-                                    ┌────────────┴───────────┐
-                                    ▼                         ▼
-                          Travel Agent Lambda          (per-component JWT)
-                          Strands + Bedrock                   │
-                          watch CRUD tools                     ▼
-                                    │                 flights-mcp (Duffel)
-                                    ▼                 hotels-mcp  (LiteAPI)
-                          Watches + FareHistory  <────────────┘
-                          DynamoDB (status GSI)
-                                    ▲
-   EventBridge schedule ──> Poller Lambda ──> MCP price fetch ──> snapshot
-                                    │            ──> threshold + anomaly gates
-                                    │            ──> Bedrock decision (ADR 0004)
-                                    ▼
-                          Notifier Lambda ──> SES email (ADR 0005)
-```
-
-Complete architecture — every AWS service, all 8 Lambdas with their tools,
-both data flows, and the trust boundaries — lives in the diagram:
-[`docs/diagrams/trip-tracker-architecture.drawio`](./docs/diagrams/trip-tracker-architecture.drawio)
-(rendered PNG: [`trip-tracker-architecture.png`](./docs/diagrams/trip-tracker-architecture.png)).
-For the per-component rationale see [`docs/DESIGN.md`](./docs/DESIGN.md); for
-user flows and sequence diagrams see [`docs/SYSTEM.md`](./docs/SYSTEM.md);
-for trust boundaries see [`docs/threat-model.md`](./docs/threat-model.md).
+Architecture source: [`docs/diagrams/trip-tracker-architecture.drawio`](./docs/diagrams/trip-tracker-architecture.drawio).
 
 **Poller and notifier flow**
 
 <img src="./docs/diagrams/poller-notifier-flowchart.svg" alt="Poller and notifier flowchart" width="100%">
-
-For the full system guide — personas, user stories, user flows, and
-end-to-end sequence diagrams — see
-[`docs/SYSTEM.md`](./docs/SYSTEM.md). For the design rationale of every
-component (constraints, alternatives rejected, tradeoffs) see
-[`docs/DESIGN.md`](./docs/DESIGN.md).
 
 **Components**
 
@@ -118,85 +83,50 @@ below). The test suite mocks external sends/calls where needed.
 
 ## Running the project
 
-Arm64 by default for cost efficiency; change the architecture in the
-IaC if you need x86.
+Choose the runbook for the path you want to exercise:
+
+| Goal | Start here |
+|---|---|
+| Chat-path fixture rehearsal | [`docs/dry-run.md`](./docs/dry-run.md) |
+| Scheduled poller/notifier fixture scenarios | [`docs/fixture-poller-notifier-scenarios.md`](./docs/fixture-poller-notifier-scenarios.md) |
+| Live launch and 7-day evidence run | [`docs/live-launch.md`](./docs/live-launch.md) |
+
+Arm64 is the default Lambda architecture for cost efficiency; change the IaC if
+you need x86.
 
 ### Prerequisites
 
-- AWS CLI, Git, Docker
-- AWS CDK, Node.js
-- For live Bedrock: access to the configured model (default
-  `claude-haiku-4-5-20251001`) in your deploy region
+- AWS CLI, Git, Docker, Node.js, Python 3.12
+- AWS CDK
+- Bedrock model access:
+  - chat agent: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+  - poller decision: `claude-haiku-4-5-20251001`
+- SES sender/recipient emails verified if your account is in the SES sandbox
 
-### Install
-
-```bash
-npm install
-(cd lambdas/agent-authorizer && npm install)
-(cd lambdas/mcp-authorizer && npm install)
-(cd lambdas/flights-mcp && npm install)
-(cd lambdas/hotels-mcp && npm install)
-```
-
-### Configure
-
-All configuration is supplied as CDK *context* (there is no runtime
-`.env`). Copy [`.env.example`](./.env.example) to `.env` to keep your
-values handy, then expand them onto the deploy command. A fixture/stub
-deploy needs **no** external API keys:
-
-```bash
-# Fixture rehearsal - MCP fixture responses and poller Bedrock stub.
-# If a notification is triggered, the notifier attempts a real SES email send.
-# notifierSenderEmail/notifierRecipientEmail are required and must be SES-
-# verified as needed for your account sandbox state.
-# The agent's own Bedrock model is NOT stubbed — enable model access for
-# the agent model in your deploy region (see Prerequisites) or the first
-# chat returns AccessDeniedException.
-cdk deploy -c bedrockMode=stub \
-           -c notifierSenderEmail=you@example.com \
-           -c notifierRecipientEmail=you@example.com
-
-# Full live deploy — real flight/hotel prices, real Bedrock call, real SES:
-cdk deploy -c mcpMode=live -c duffelApiKey=… -c liteApiKey=… \
-           -c bedrockMode=live \
-           -c notifierSenderEmail=… -c notifierRecipientEmail=…
-```
-
-Review the IAM changes CDK prints before approving. The SES sender
-identity must be verified out of band (AWS console) before a live send;
-new accounts are in the SES sandbox until you request production access.
-
-### Post-deploy and web UI
-
-```bash
-./prep-web.sh          # sets demo-user passwords, writes web/.env
-cd web
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python app.py          # http://localhost:8000/chat/
-```
-
-Log in via the Cognito-hosted screen as `Alice` or `Bob` (password set
-by `prep-web.sh`), then talk to the agent:
-
-- "Watch a trip to Tokyo in October, 5 nights from SFO, max $1500 total"
-- "Tighten that to weekends only"
-- "What's happening with my watches?"
-
-### Clean up
-
-```bash
-cdk destroy
-```
+Configuration is supplied as CDK context; [`.env.example`](./.env.example) is
+only a scratch template for values you pass into `cdk deploy`.
 
 ## Testing
 
-```bash
-npm test                                        # CDK construct tests (jest)
-# Python Lambdas use the shared test venv; run per package:
-cd lambdas/poller   && ../../.venv-tests/Scripts/python.exe -m pytest tests/ -q
-cd lambdas/notifier && ../../.venv-tests/Scripts/python.exe -m pytest tests/ -q
+```bat
+npm test
+npm --prefix lambdas/agent-authorizer test
+npm --prefix lambdas/mcp-authorizer test
+npm --prefix lambdas/flights-mcp test
+npm --prefix lambdas/hotels-mcp test
+
+python -m venv .venv-tests
+.venv-tests\Scripts\activate.bat
+python -m pip install --upgrade pip
+python -m pip install -r requirements-test.txt
+
+.venv-tests\Scripts\python.exe -m pytest lambdas/poller/tests -q
+.venv-tests\Scripts\python.exe -m pytest lambdas/notifier/tests -q
+.venv-tests\Scripts\python.exe -m pytest lambdas/travel-agent/tests -q
+.venv-tests\Scripts\python.exe -m pytest web/tests -q
+cd evals
+..\.venv-tests\Scripts\python.exe -m pytest tests -q
+cd ..
 ```
 
 Construct synth tests skip Docker bundling via the
@@ -206,6 +136,61 @@ GitHub Actions ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml))
 runs the same suites on every push and pull request: the CDK construct
 tests, the MCP-server / authorizer Node suites, and the Python Lambda +
 evals suites against the pinned [`requirements-test.txt`](./requirements-test.txt).
+
+## Documentation
+
+### How the system works
+
+| File | Purpose |
+|---|---|
+| [`docs/SYSTEM.md`](./docs/SYSTEM.md) | System guide: personas, user stories, user flows, and end-to-end sequence diagrams |
+| [`docs/DESIGN.md`](./docs/DESIGN.md) | Per-component design rationale: constraints, alternatives rejected, and tradeoffs accepted |
+| [`docs/threat-model.md`](./docs/threat-model.md) | Trust boundaries between components, mitigations, residual risks, and threat scenarios |
+
+### How to run it
+
+| File | Purpose |
+|---|---|
+| [`docs/dry-run.md`](./docs/dry-run.md) | Fixture-mode walkthrough of the chat path with the five main chat patterns and expected behavior |
+| [`docs/fixture-poller-notifier-scenarios.md`](./docs/fixture-poller-notifier-scenarios.md) | Two named fixture scenarios, Tokyo snapshot-only and Paris alert-firing, for exercising the scheduled path |
+| [`docs/live-launch.md`](./docs/live-launch.md) | Live launch protocol: real Duffel, LiteAPI, Bedrock, SES, evidence capture, and teardown |
+| [`docs/demo-script.md`](./docs/demo-script.md) | Short recording outline and evidence checklist for presenting a fixture or live run |
+
+### Visuals
+
+All system visuals live in [`docs/diagrams/`](./docs/diagrams/).
+
+| File | Purpose |
+|---|---|
+| [`docs/diagrams/trip-tracker-architecture.drawio`](./docs/diagrams/trip-tracker-architecture.drawio) + [`trip-tracker-architecture.png`](./docs/diagrams/trip-tracker-architecture.png) | Canonical architecture diagram: every AWS service, every flow, numbered steps with right-side narrative |
+| [`docs/diagrams/poller-notifier-flowchart.svg`](./docs/diagrams/poller-notifier-flowchart.svg) | Zoomed-in scheduled-path decision flow: poller gates, Bedrock decision, notifier writeback |
+| [`docs/diagrams/trip-tracker-architecture-review-log.md`](./docs/diagrams/trip-tracker-architecture-review-log.md) | Why the architecture diagram changed across review rounds |
+| `docs/diagrams/identify-product-defects-using-industrial-computer-vision-ra.pdf` | AWS reference architecture used for diagram style |
+| `docs/diagrams/upload-process-notify-pipeline-v9.drawio` | Internal reference diagram used for layout style |
+
+### Decision records
+
+| File | Purpose |
+|---|---|
+| [`docs/adr/README.md`](./docs/adr/README.md) | ADR index |
+| [`docs/adr/0001-user-scoped-tools-via-closure-factory.md`](./docs/adr/0001-user-scoped-tools-via-closure-factory.md) | Why watch CRUD tools close over a verified `user_id` instead of accepting it as an LLM parameter |
+| [`docs/adr/0002-fixture-replay-mode.md`](./docs/adr/0002-fixture-replay-mode.md) | Why MCP servers have fixture mode for no provider keys and deterministic tests |
+| [`docs/adr/0003-sequential-poll-loop.md`](./docs/adr/0003-sequential-poll-loop.md) | Why the poller walks watches sequentially instead of in parallel |
+| [`docs/adr/0004-bedrock-decision.md`](./docs/adr/0004-bedrock-decision.md) | Why a Bedrock model decides alert-worthiness instead of pure threshold logic |
+| [`docs/adr/0005-after-ses-idempotency.md`](./docs/adr/0005-after-ses-idempotency.md) | Why `lastAlertedAt` is written after SES send, not before |
+| [`docs/adr/0006-per-component-jwt-secrets.md`](./docs/adr/0006-per-component-jwt-secrets.md) | Why the agent and poller sign MCP calls with separate Secrets Manager secrets |
+| [`docs/adr/0007-watches-status-gsi.md`](./docs/adr/0007-watches-status-gsi.md) | Why the poller reads active watches through a GSI instead of a Scan |
+
+### Design history
+
+| File | Purpose |
+|---|---|
+| [`docs/superpowers/specs/2026-05-08-trip-tracker-agent-design.md`](./docs/superpowers/specs/2026-05-08-trip-tracker-agent-design.md) | Original system design spec, updated where needed to reflect current implementation |
+
+### Archive
+
+[`docs/.archive/`](./docs/.archive/) contains historical artifacts superseded
+by the shipped implementation.
 
 ## License
 

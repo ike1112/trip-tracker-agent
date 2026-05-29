@@ -1,8 +1,8 @@
-# Dry Run — Cost-Free Fixture-Mode Walkthrough
+# Dry Run — Fixture-Mode Chat Walkthrough
 
-The first end-to-end exercise of the deployed system. **No third-party keys,
-fractions of a cent in cost, no recurring charges.** Drives the chat in the
-browser and shows the verbatim agent response from the 2026-05-18 run
+The first end-to-end exercise of the deployed system. **No travel-provider
+keys, fixture MCP data, and only light Bedrock chat cost.** Drives the chat in
+the browser and shows the verbatim agent response from the 2026-05-18 run
 (Claude Sonnet 4.5, stub/fixture deploy) so you know what a correct
 response looks like.
 
@@ -22,14 +22,16 @@ travel-agent Lambda → Bedrock reasoning → fixture flight/hotel data →
 DynamoDB watch CRUD → S3 session memory.
 
 **Stubbed / fixture (not tested here):** poller decision (`bedrockMode=stub`),
-SES email (`sesMode=stub`), real Duffel/LiteAPI prices (`mcpMode=fixture`).
+scheduled SES alert delivery, real Duffel/LiteAPI prices (`mcpMode=fixture`).
+The notifier no longer has an SES stub mode; if an alert is triggered, it
+attempts a real SES email send. This chat walkthrough should not trigger one.
 
 **Cost:** fractions of a cent (a few Claude Sonnet 4.5 chat turns). Far
 under the $10 budget alarm. Nothing recurring; `cdk destroy` ends it.
 
 ---
 
-## Prerequisites (only 3 are real — the rest is stubbed)
+## Prerequisites
 
 - [ ] **Bedrock model access** — AWS console → Bedrock → (deploy region) →
       Model access. The chat agent has **no stub mode** — it always calls
@@ -37,8 +39,11 @@ under the $10 budget alarm. Nothing recurring; `cdk destroy` ends it.
       `anthropic.claude-sonnet-4-5-20250929-v1:0` and deploy with
       `-c agentBedrockModelId=us.anthropic.claude-sonnet-4-5-20250929-v1:0`
       (the `us.` inference profile; must match the `^us\.` regex in
-      `lib/agent.js:58`). Default if the flag is omitted is Claude 3.5
-      Haiku (`lib/agent.js:13`) — then enable that one instead.
+      `lib/agent.js`). The default is currently this Sonnet 4.5 inference
+      profile.
+- [ ] **SES emails for deploy context** — provide valid sender and recipient
+      email addresses. They only need to be SES-verified if you exercise an
+      alert path that actually sends email.
 - [ ] **`cdk bootstrap`** has been run for this AWS account + region.
 - [ ] **Docker daemon running** — CDK bundles the Python Lambdas at deploy.
 - [ ] `aws sts get-caller-identity` returns the account you intend to use.
@@ -47,25 +52,24 @@ under the $10 budget alarm. Nothing recurring; `cdk destroy` ends it.
 
 ---
 
-## Deploy (cost-free path)
+## Deploy (fixture chat path)
 
 ```
 aws sts get-caller-identity            # confirm correct account
 cdk bootstrap                          # only if never done for this acct/region
-cdk deploy -c bedrockMode=stub -c sesMode=stub \
+cdk deploy -c bedrockMode=stub \
            -c notifierSenderEmail=YOUR_EMAIL@example.com \
            -c notifierRecipientEmail=YOUR_EMAIL@example.com
 ```
 
-The four context flags above are **all required** even for the cost-free
-dry run, and each is enforced at synth (fails before bootstrap/Docker):
+The context flags above are required for this dry run:
 - `bedrockMode=stub` — stubs the poller decision call.
-- `sesMode=stub` — no email is ever *sent*.
-- `notifierSenderEmail` + `notifierRecipientEmail` — `notifier-server.js:54`
-  validates **both** before it checks `sesMode`. In stub mode SES never
-  sends, so these need not be SES-verified addresses; any well-formed email
-  works. `budgetAlarmEmail` is **not** needed separately —
-  `budget-alarm.js:62` falls back to `notifierRecipientEmail`.
+- `notifierSenderEmail` + `notifierRecipientEmail` — required because the
+  notifier always attempts real SES when an alert is triggered. This chat
+  walkthrough does not trigger an alert, but a scheduled-path fixture scenario
+  can.
+- `budgetAlarmEmail` is **not** needed separately — `budget-alarm.js` falls
+  back to `notifierRecipientEmail`.
 - `mcpMode` defaults to `fixture` (no Duffel/LiteAPI keys needed).
 
 Review the IAM diff CDK prints, then approve. Note the stack outputs (API
@@ -263,7 +267,7 @@ Nothing recurs; cost stops.
 ## What this does NOT cover
 
 This is the **chat path** only. The scheduled poller → Bedrock decision →
-SES alert email path is stubbed in this deploy.
+SES alert email path is not exercised by these chat messages.
 
 ## Exercise the scheduled path in fixture mode (optional)
 

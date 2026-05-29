@@ -63,8 +63,10 @@ per cycle.
   ARN grant would let the Lambda send as ANY address in the
   domain. Domain-wide grants must come through a separate
   construct that documents the wider blast radius.
-- **SES_MODE env (`live` / `stub`)** mirrors `BEDROCK_MODE`.
-  Tests pin stub; synth-time validation catches typos.
+- **No deploy-time SES stub mode.** The notifier always attempts a real
+  SES send when invoked with `decision.alert == true`. Unit and integration
+  tests mock the SES client instead of changing production behavior with a
+  runtime mode flag.
 
 ## Consequences
 
@@ -87,11 +89,10 @@ per cycle.
   sender identity ARN. `dynamodb:UpdateItem` scoped to the
   Watches table only — no put, no delete, no scan. Notifier
   cannot send AS another identity or write to FareHistory.
-- **Test discipline matches the rest of the codebase.**
-  `SES_MODE=stub` keeps the entire test suite cost-free.
+- **Test discipline keeps production behavior honest.**
   Conditional-update branches are pinned by tests in `test_writer.py`
   group B. The end-to-end test in `test_handler_e2e.py` exercises
-  template → SES → writer in a single moto-backed call.
+  template → mocked SES → writer in a single moto-backed call.
 
 **Cost:**
 

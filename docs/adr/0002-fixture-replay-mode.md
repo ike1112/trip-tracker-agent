@@ -69,9 +69,10 @@ is a deploy-time context flag:
 cdk deploy -c mcpMode=live -c duffelApiKey=sk_live_...
 ```
 
-Fixtures are recorded once via a one-shot script (`tools/record-fixtures.py`,
-not in this slice) with real keys, then committed. They're treated as
-test data: small, hand-curated, illustrative of the cases the agent
+Fixtures are committed under each MCP server's `fixtures/` directory. The
+original plan called for a one-shot `tools/record-fixtures.py` helper, but the
+current repo does not treat that helper as a maintained artifact. Fixtures are
+treated as test data: small, hand-curated, illustrative of the cases the agent
 actually exercises.
 
 ## Consequences

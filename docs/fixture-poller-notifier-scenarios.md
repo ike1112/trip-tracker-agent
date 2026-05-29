@@ -51,7 +51,7 @@ poll_complete watches_errored=0
 Purpose:
 
 ```text
-EventBridge/manual poller -> flights MCP -> hotels MCP -> FareHistory write -> decision_made alert=true -> async notifier invoke -> SES stub/live path -> Watches alert writeback
+EventBridge/manual poller -> flights MCP -> hotels MCP -> FareHistory write -> decision_made alert=true -> async notifier invoke -> real SES attempt -> Watches alert writeback
 ```
 
 Chat input:
